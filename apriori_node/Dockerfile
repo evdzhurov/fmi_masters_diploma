@@ -1,4 +1,4 @@
-FROM ubuntu_mpi_test
+FROM mpi_node
 
 LABEL maintainer="edj@fastmail.fm"
 
