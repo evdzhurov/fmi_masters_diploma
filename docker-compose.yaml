@@ -1,8 +1,9 @@
 version: "3.5"
 services:
-    apriori-miner:
+    apriori-worker:
         image: apriori_node
-        networks: 
+        entrypoint: ["/usr/sbin/sshd", "-D"]
+        networks:
             - apriori-net
 networks:
     apriori-net:
