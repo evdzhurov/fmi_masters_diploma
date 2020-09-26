@@ -22,8 +22,7 @@ RUN cd /usr/local/src/ && \
     #rm -rf mpich-3.2
 
 # Setup ssh
-COPY .ssh /root/.ssh
-RUN chmod 600 /root/.ssh/id_rsa
+RUN ssh-keygen -t rsa
 
 EXPOSE 22
-CMD ["service", "ssh", "start"]
+#CMD ["service", "ssh", "start"]

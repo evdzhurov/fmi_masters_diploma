@@ -1,7 +1,7 @@
 version: "3.5"
 services:
     apriori-miner:
-        image: apriori_mpi_test
+        image: apriori_node
         networks: 
             - apriori-net
 networks:
