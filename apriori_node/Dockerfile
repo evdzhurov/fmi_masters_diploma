@@ -39,5 +39,5 @@ LABEL maintainer="edj@fastmail.fm"
 WORKDIR /usr/src/app
 
 # Build app
-COPY apriori_mpi.c .
-RUN mpicc apriori_mpi.c -o apriori_mpi
+COPY apriori_mpi.cpp .
+RUN mpicxx apriori_mpi.cpp -o apriori_mpi
