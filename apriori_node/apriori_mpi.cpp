@@ -3,6 +3,8 @@
 #include <cstring>
 #include <cstdlib>
 
+#include <unordered_map>
+
 ///////////////////////////////////////////////////////////////////////////////////////////
 struct Params
 {
@@ -17,6 +19,31 @@ struct Params
         std::cout << "min_sup = " << m_MinSup << ", ";
         std::cout << "min_conf = " << m_MinConf << ")\n";
     }
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////
+struct ItemMap
+{
+    int GetId(const std::string& item)
+    {
+        auto it = m_ItemToId.find(item);
+        if (it == m_ItemToId.end())
+        {
+            it = m_ItemToId.emplace(item, m_NextId++).first;
+            m_IdToItem.emplace(it->second, item);
+        }
+        return it->second; 
+    }
+
+    const std::string* GetItem(int id) const
+    {
+        auto it = m_IdToItem.find(id);
+        return it != m_IdToItem.end() ? &(it->second) : nullptr;
+    }
+
+    int m_NextId = 0;
+    std::unordered_map<std::string, int> m_ItemToId;
+    std::unordered_map<int, std::string> m_IdToItem;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
