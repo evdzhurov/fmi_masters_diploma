@@ -3,7 +3,10 @@
 #include <cstring>
 #include <cstdlib>
 
+#include <vector>
+#include <map>
 #include <unordered_map>
+#include <sstream>
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 struct Params
@@ -45,6 +48,95 @@ struct ItemMap
     std::unordered_map<std::string, int> m_ItemToId;
     std::unordered_map<int, std::string> m_IdToItem;
 };
+
+///////////////////////////////////////////////////////////////////////////////////////////
+struct Itemset
+{
+    std::size_t Size() const { return m_Items.size(); }
+
+    bool operator<(const Itemset& other) const
+    {
+        if (Size() != other.Size())
+            return Size() < other.Size();
+
+        for (int i = 0; i < Size(); ++i)
+        {
+            if (m_Items[i] < other.m_Items[i])
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    void FromString(const std::string& str)
+    {
+        m_Items.clear();
+        std::stringstream ss(str);
+        std::string token;
+        while(std::getline(ss, token, '|'))
+        {
+            m_Items.push_back(std::stoi(token));
+        }
+    }
+
+    std::string ToString() const
+    {
+        if (m_Items.empty()) return "";
+        std::stringstream ss;
+        for (int i = 0; i < m_Items.size() - 1; ++i)
+            ss << m_Items[i] << '|';
+        ss << m_Items.back();
+        return ss.str();
+    }
+
+    std::vector<int> m_Items;
+};
+
+using ItemsetCounts = std::map<Itemset, int>;
+
+///////////////////////////////////////////////////////////////////////////////////////////
+struct FrequentItemsts
+{
+    float GetSupport(const Itemset& itemset) const
+    {
+        if (m_NumTrans == 0) return 0.f;
+
+        auto itCounts = m_KthItemsetCounts.find(itemset.Size());
+        if (itCounts == m_KthItemsetCounts.end()) return 0.f;
+
+        auto itItemset = itCounts->second.find(itemset);
+        if (itItemset == itCounts->second.end()) return 0.f;
+        
+        return itItemset->second / m_NumTrans;
+    }
+
+    ItemMap m_ItemMap;
+    std::unordered_map<int, ItemsetCounts> m_KthItemsetCounts;
+    int m_NumTrans = 0;
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////
+struct Rule
+{
+    std::string ToString() const
+    {
+        std::stringstream ss;
+        ss << '{' << m_Antidecent.ToString().c_str();
+        ss << "} => {" << m_Consequent.ToString().c_str();
+        ss << '}';
+    }
+
+    Itemset m_Antidecent;
+    Itemset m_Consequent;
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////
+void Apriori(const Params& params)
+{
+    // Raw Data -> Transactions
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
