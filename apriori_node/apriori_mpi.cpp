@@ -7,6 +7,7 @@
 #include <map>
 #include <unordered_map>
 #include <sstream>
+#include <algorithm>
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 struct Params
@@ -27,7 +28,7 @@ struct Params
 ///////////////////////////////////////////////////////////////////////////////////////////
 struct ItemMap
 {
-    int GetId(const std::string& item)
+    int GetOrCreateId(const std::string& item)
     {
         auto it = m_ItemToId.find(item);
         if (it == m_ItemToId.end())
@@ -44,6 +45,16 @@ struct ItemMap
         return it != m_IdToItem.end() ? &(it->second) : nullptr;
     }
 
+    void Print() const
+    {
+        std::cout << "ItemMap:\n";
+        for (const auto& pair : m_ItemToId)
+        {
+            std::cout << '\t' << pair.first << " -> " << pair.second << '\n';
+        }
+        std::cout << '\n';
+    }
+
     int m_NextId = 0;
     std::unordered_map<std::string, int> m_ItemToId;
     std::unordered_map<int, std::string> m_IdToItem;
@@ -52,6 +63,9 @@ struct ItemMap
 ///////////////////////////////////////////////////////////////////////////////////////////
 struct Itemset
 {
+    Itemset() = default;
+    explicit Itemset(int item) : m_Items{item} {}; // Single item initialization
+
     std::size_t Size() const { return m_Items.size(); }
 
     bool operator<(const Itemset& other) const
@@ -94,6 +108,7 @@ struct Itemset
     std::vector<int> m_Items;
 };
 
+using Itemsets = std::vector<Itemset>;
 using ItemsetCounts = std::map<Itemset, int>;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -109,7 +124,7 @@ struct FrequentItemsts
         auto itItemset = itCounts->second.find(itemset);
         if (itItemset == itCounts->second.end()) return 0.f;
         
-        return itItemset->second / m_NumTrans;
+        return itItemset->second / (float)m_NumTrans;
     }
 
     ItemMap m_ItemMap;
@@ -124,8 +139,8 @@ struct Rule
     {
         std::stringstream ss;
         ss << '{' << m_Antidecent.ToString().c_str();
-        ss << "} => {" << m_Consequent.ToString().c_str();
-        ss << '}';
+        ss << "} => {" << m_Consequent.ToString().c_str() << '}';
+        return ss.str();
     }
 
     Itemset m_Antidecent;
@@ -133,9 +148,127 @@ struct Rule
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-void Apriori(const Params& params)
+using InputData = std::vector<std::vector<std::string>>; // Raw transactions
+using OutputData = std::vector<std::string>;
+
+static const InputData k_SampleData = {
+    {"milk", "cheese", "oats", "carrots"},
+    {"cheese", "oats", "onions" },
+    {"milk", "cheese", "bread"}
+};
+
+OutputData Apriori(const InputData& data, const Params& params)
 {
-    // Raw Data -> Transactions
+    FrequentItemsts fsets;
+    fsets.m_NumTrans = data.size();
+
+    std::vector<std::vector<int>> transactions;
+
+    // Map input data to transactions
+    for (const auto& row : data)
+    {
+        transactions.emplace_back();
+        for (const auto& item : row)
+        {
+            transactions.back().emplace_back(fsets.m_ItemMap.GetOrCreateId(item));
+        }
+    }
+
+    fsets.m_ItemMap.Print();
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    auto count = [&](const Itemsets& itemsets, int k) 
+    {
+        //first = mpi_rank * t_count // mpi_size
+        //last = (mpi_rank + 1) * t_count // mpi_size
+        auto counts = fsets.m_KthItemsetCounts[k];
+        for (const auto& t : transactions/*[first:last]*/)
+        {
+            if (t.size() < k) continue; // Transaction cannot contain itemset
+            for (const auto& itemset : itemsets)
+            {
+                bool found = true;
+                for (const auto& item : itemset.m_Items)
+                {
+                    if (std::find(t.begin(), t.end(), item) == t.end())
+                    {
+                        found = false;
+                        break;
+                    }
+                }
+
+                if (found)
+                {
+                    counts[itemset] += 1;
+                }
+            }
+        }
+    };
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    auto gather_1 = []()
+    {
+    };
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    auto gather_k = [](int k)
+    {
+    };
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    auto prune = [&](const std::vector<Itemset>& itemsets, int k)
+    {
+        std::vector<Itemset> result;
+        auto& counts = fsets.m_KthItemsetCounts[k];
+        for (const auto& itemset : itemsets)
+        {
+            if (counts[itemset] / (float)fsets.m_NumTrans < params.m_MinSup)
+            {
+                counts.erase(itemset);
+            }
+            else
+            {
+                result.push_back(itemset);
+            }
+        }
+        
+        return result;
+    };
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    auto gen_L1 = [&]() -> Itemsets
+    {
+        std::vector<Itemset> c1;
+        c1.reserve(fsets.m_ItemMap.m_ItemToId.size());
+        for (const auto& pair: fsets.m_ItemMap.m_ItemToId)
+        {
+            c1.emplace_back(pair.second);
+        }
+        count(c1, 1);
+        gather_1();
+        return prune(c1, 1);
+    };
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    auto gen_Lk = [](const Itemsets& itemsets, int k) -> Itemsets
+    {
+        return Itemsets();
+    };
+
+    ///////////////////////////////////////////////////////////////////////////////////////////
+    int k = 2;
+    Itemsets L = gen_L1();
+    while (L.size() > 0)
+    {
+        if (params.m_MaxK > 0 and k > params.m_MaxK) break;
+        Itemsets C = gen_Lk(L, k);
+        count(C, k);
+        gather_k(k);
+        L = prune(C, k);
+        ++k;
+    }
+
+    return OutputData();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -174,6 +307,8 @@ int main(int argc, char* argv[])
     }
 
     params.Print();
+
+    Apriori(k_SampleData, params);
 
     MPI_Finalize();
     std::cout << "\n======================= MPI FINALIZED =======================\n\n";
