@@ -26,6 +26,13 @@ struct Params
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
+struct MPIContext
+{
+    int m_Size = 0;
+    int m_Rank = 0;
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////
 struct ItemMap
 {
     int GetOrCreateId(const std::string& item)
@@ -157,7 +164,7 @@ static const InputData k_SampleData = {
     {"milk", "cheese", "bread"}
 };
 
-OutputData Apriori(const InputData& data, const Params& params)
+OutputData Apriori(const InputData& data, const Params& params, const MPIContext& ctx)
 {
     FrequentItemsts fsets;
     fsets.m_NumTrans = data.size();
@@ -206,8 +213,63 @@ OutputData Apriori(const InputData& data, const Params& params)
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////
-    auto gather_1 = []()
+    auto gather_1 = [&]()
     {
+        auto& counts = fsets.m_KthItemsetCounts[1];
+
+        std::vector<int> globalCountSizes(ctx.m_Size);
+        std::vector<int> countOffsets;
+        countOffsets.reserve(ctx.m_Size);
+        
+        // Calculate total size of counts across processes
+        const int localCountSize = counts.size() * 2;
+
+        MPI_Allgather(
+            &localCountSize,
+            1,
+            MPI_INT,
+            globalCountSizes.data(),
+            globalCountSizes.size(),
+            MPI_INT,
+            MPI_COMM_WORLD);
+
+        // Create offsets from running sum of global counts size
+        int globalCountsSize = 0;
+        for (int size : globalCountSizes)
+        {
+            countOffsets.push_back(globalCountsSize);
+            globalCountsSize += size;
+        }
+
+        // Gather all counts
+        std::vector<int> localCounts;
+        localCounts.reserve(localCountSize);
+
+        for (const auto& kvp : counts)
+        {
+            localCounts.push_back(kvp.first.m_Items.front());
+            localCounts.push_back(kvp.second);
+        }
+
+        std::vector<int> globalCounts(globalCountsSize);
+
+        MPI_Allgatherv(
+            localCounts.data(),
+            localCounts.size(),
+            MPI_INT,
+            globalCounts.data(),
+            globalCountSizes.data(),
+            countOffsets.data(),
+            MPI_INT,
+            MPI_COMM_WORLD);
+        
+
+        // Merge counts from all processes into local data
+        counts.clear();
+        for (int i = 1; i < globalCountsSize; ++i)
+        {
+            counts[Itemset(globalCounts[i-1])] += globalCounts[i];
+        }
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -276,14 +338,13 @@ int main(int argc, char* argv[])
 {
     MPI_Init(&argc, &argv);
 
-    int size = 0;
-    int rank = 0;
+    MPIContext ctx;
 
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &ctx.m_Size);
+	MPI_Comm_rank(MPI_COMM_WORLD, &ctx.m_Rank);
 
     std::cout << "\n======================= MPI INITIALIZED =======================\n";
-    std::cout << "MPI rank " << rank << '/' << size << '\n';
+    std::cout << "MPI rank " << ctx.m_Rank << '/' << ctx.m_Size << '\n';
 
     Params params;
 
@@ -308,7 +369,7 @@ int main(int argc, char* argv[])
 
     params.Print();
 
-    Apriori(k_SampleData, params);
+    Apriori(k_SampleData, params, ctx);
 
     MPI_Finalize();
     std::cout << "\n======================= MPI FINALIZED =======================\n\n";
