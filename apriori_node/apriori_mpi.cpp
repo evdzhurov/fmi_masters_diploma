@@ -273,8 +273,64 @@ OutputData Apriori(const InputData& data, const Params& params, const MPIContext
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////
-    auto gather_k = [](int k)
+    auto gather_k = [&](int k)
     {
+        auto& counts = fsets.m_KthItemsetCounts[k];
+        
+        // Reduce scatter
+        const int size = counts.size();
+        const int size_part = size / ctx.m_Size;
+        std::vector<int> sizes(ctx.m_Size, size_part);
+        
+        // Distribute remainder
+        for (int i = 0; i < size % ctx.m_Size; ++i) 
+            sizes[i] += 1;
+
+        std::vector<int> localCounts;
+        localCounts.reserve(size);
+
+        for (const auto& kvp : counts)
+            localCounts.push_back(kvp.second);
+
+        std::vector<int> globalCountsForRank(sizes[ctx.m_Rank]);
+
+        MPI_Reduce_scatter(
+            localCounts.data(), /*sendbuf*/
+            globalCountsForRank.data(), /*recvbuf*/
+            sizes.data(), /*recvcounts*/
+            MPI_INT,
+            MPI_SUM,
+            MPI_COMM_WORLD
+        );
+
+        // All gather
+        std::vector<int> globalCounts(size);
+        std::vector<int> globalCountsOffsets;
+
+        int offsetSum = 0;
+        for (const auto& size : sizes)
+        {
+            globalCountsOffsets.push_back(offsetSum);
+            offsetSum += size;
+        }
+
+        MPI_Allgatherv(
+            globalCountsForRank.data(), /*sendbuf*/
+            globalCountsForRank.size(), /*sendcount*/
+            MPI_INT,
+            globalCounts.data(), /*recvbuf*/
+            sizes.data(), /*recvcounts*/
+            globalCountsOffsets.data(), /*displacements*/
+            MPI_INT,
+            MPI_COMM_WORLD
+        );
+
+        // Update final counts assuming dict is ordered
+        int i = 0;
+        for (auto it = counts.begin(); it != counts.end(); ++it, ++i)
+        {
+            it->second = globalCounts[i];
+        }
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////
