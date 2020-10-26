@@ -145,14 +145,16 @@ struct Rule
     std::string ToString() const
     {
         std::stringstream ss;
-        ss << '{' << m_Antidecent.ToString().c_str();
-        ss << "} => {" << m_Consequent.ToString().c_str() << '}';
+        ss << '{' << m_Antidecent.c_str() << "} => {" << m_Consequent.c_str() << '}';
         return ss.str();
     }
 
-    Itemset m_Antidecent;
-    Itemset m_Consequent;
+    std::string m_Antidecent;
+    std::string m_Consequent;
+    float m_Confidence = 0.f;
+    float m_Lift = 0.f;
 };
+using Rules = std::vector<Rule>;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 using InputData = std::vector<std::vector<std::string>>; // Raw transactions
@@ -164,7 +166,7 @@ static const InputData k_SampleData = {
     {"milk", "cheese", "bread"}
 };
 
-OutputData Apriori(const InputData& data, const Params& params, const MPIContext& ctx)
+FrequentItemsts Apriori(const InputData& data, const Params& params, const MPIContext& ctx)
 {
     FrequentItemsts fsets;
     fsets.m_NumTrans = data.size();
@@ -186,11 +188,14 @@ OutputData Apriori(const InputData& data, const Params& params, const MPIContext
     ///////////////////////////////////////////////////////////////////////////////////////////
     auto count = [&](const Itemsets& itemsets, int k) 
     {
-        //first = mpi_rank * t_count // mpi_size
-        //last = (mpi_rank + 1) * t_count // mpi_size
+        int first = ctx.m_Rank * fsets.m_NumTrans / ctx.m_Size;
+        int last = (ctx.m_Rank + 1) * fsets.m_NumTrans / ctx.m_Size;
         auto counts = fsets.m_KthItemsetCounts[k];
-        for (const auto& t : transactions/*[first:last]*/)
+
+        for (int i = first; i < last; ++i)
         {
+            const auto& t = transactions[i];
+
             if (t.size() < k) continue; // Transaction cannot contain itemset
             for (const auto& itemset : itemsets)
             {
@@ -386,7 +391,82 @@ OutputData Apriori(const InputData& data, const Params& params, const MPIContext
         ++k;
     }
 
-    return OutputData();
+    return fsets;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float support, const FrequentItemsts& fsets)
+{
+    auto subsetsOf = [](const Itemset& itemset) -> Itemsets
+    {
+        Itemsets result;
+        int size = itemset.Size();
+        for (int i = 0; i < size; ++i)
+        {
+            Itemset subset;
+            subset.m_Items.reserve(size-1);
+            auto first = std::begin(itemset.m_Items);
+            auto leaveOneOut = first + i;
+            auto last = std::end(itemset.m_Items);
+            std::copy(first, leaveOneOut, std::back_inserter(subset.m_Items));
+            std::copy(leaveOneOut + 1, last), std::back_inserter(subset.m_Items));
+            result.emplace_back(std::move(subset));
+        }
+        return result;
+    };
+
+    auto subtract = [](const Itemset& lhs, const Itemset& rhs) -> Itemset
+    {
+        Itemset result;
+        return std::set_difference(
+            std::begin(lhs.m_Items), std::end(lhs.m_Items),
+            std::begin(rhs.m_Items), std::end(rhs.m_Items),
+            std::back_inserter(std::begin(result.m_Items)));
+
+        return result;
+    };
+
+    for (const auto& itemset : subsetsOf(rhs))
+    {
+        float conf = support / fsets.GetSupport(itemset);
+        if (conf >= params.m_MinConf)
+        {
+            Rule rule;
+            rule.m_Antidecent = itemset.ToString();
+            Itemset consequent = subtract(lhs, itemset);
+            rule.m_Consequent = consequent.ToString();
+            rule.m_Confidence = conf;
+            rule.m_Lift = conf / fsets.GetSupport(consequent);
+
+            if (itemset.size() > 1)
+                GenerateRulesR(lhs, itemset, rules, support, fsets);
+        }
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+std::vector<Rule> GenerateRules(const FrequentItemsts& fsets, const Params& params const MPIContext& ctx)
+{
+    std::vector<Rule> rules;
+
+    for (int i = 1; i <= params.m_MaxK; ++i)
+    {
+        // Partition itemsets equally
+        int numItemsets = fsets.m_KthItemsetCounts[i].size();
+        int first = ctx.m_Rank * numItemsets / ctx.m_Size;
+        int last = (ctx.m_Rank + 1) * numItemsets / ctx.m_Size;
+
+        auto firstIt = std::advance(fsets.m_KthItemsetCounts[i].begin(), first);
+        auto lastIt = std::advance(firstIt, last - first);
+        for (;firstIt != lastIt; ++firstIt)
+        {
+            const auto& itemset = firstIt->first;
+            GenerateRulesR(itemset, itemset, rules);
+        }
+
+    }
+
+    return rules;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -425,7 +505,8 @@ int main(int argc, char* argv[])
 
     params.Print();
 
-    Apriori(k_SampleData, params, ctx);
+    auto fsets = Apriori(k_SampleData, params, ctx);
+    auto rules = GenerateRules(fsets, params, ctx);
 
     MPI_Finalize();
     std::cout << "\n======================= MPI FINALIZED =======================\n\n";
