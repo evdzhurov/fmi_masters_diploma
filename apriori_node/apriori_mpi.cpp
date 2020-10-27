@@ -1,13 +1,16 @@
-#include <mpi.h>
-#include <iostream>
+
 #include <cstring>
 #include <cstdlib>
+#include <cassert>
 
+#include <iostream>
 #include <vector>
 #include <map>
 #include <unordered_map>
 #include <sstream>
 #include <algorithm>
+
+#include <mpi.h>
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 struct Params
@@ -395,7 +398,7 @@ FrequentItemsts Apriori(const InputData& data, const Params& params, const MPICo
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float support, const FrequentItemsts& fsets)
+void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float support, const FrequentItemsts& fsets, const Params& params)
 {
     auto subsetsOf = [](const Itemset& itemset) -> Itemsets
     {
@@ -409,7 +412,7 @@ void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float 
             auto leaveOneOut = first + i;
             auto last = std::end(itemset.m_Items);
             std::copy(first, leaveOneOut, std::back_inserter(subset.m_Items));
-            std::copy(leaveOneOut + 1, last), std::back_inserter(subset.m_Items));
+            std::copy(leaveOneOut + 1, last, std::back_inserter(subset.m_Items));
             result.emplace_back(std::move(subset));
         }
         return result;
@@ -418,10 +421,10 @@ void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float 
     auto subtract = [](const Itemset& lhs, const Itemset& rhs) -> Itemset
     {
         Itemset result;
-        return std::set_difference(
+        std::set_difference(
             std::begin(lhs.m_Items), std::end(lhs.m_Items),
             std::begin(rhs.m_Items), std::end(rhs.m_Items),
-            std::back_inserter(std::begin(result.m_Items)));
+            std::back_inserter(result.m_Items));
 
         return result;
     };
@@ -438,32 +441,45 @@ void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float 
             rule.m_Confidence = conf;
             rule.m_Lift = conf / fsets.GetSupport(consequent);
 
-            if (itemset.size() > 1)
-                GenerateRulesR(lhs, itemset, rules, support, fsets);
+            if (itemset.m_Items.size() > 1)
+                GenerateRulesR(lhs, itemset, rules, support, fsets, params);
         }
     }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-std::vector<Rule> GenerateRules(const FrequentItemsts& fsets, const Params& params const MPIContext& ctx)
+std::vector<Rule> GenerateRules(const FrequentItemsts& fsets, const Params& params, const MPIContext& ctx)
 {
     std::vector<Rule> rules;
 
     for (int i = 1; i <= params.m_MaxK; ++i)
     {
         // Partition itemsets equally
-        int numItemsets = fsets.m_KthItemsetCounts[i].size();
+        auto it = fsets.m_KthItemsetCounts.find(i);
+        if (it == fsets.m_KthItemsetCounts.end())
+        {
+            assert(!"k-th itemsets not found!");
+            return rules;
+        }
+
+        const auto& itemsets = it->second;
+
+        int numItemsets = itemsets.size();
         int first = ctx.m_Rank * numItemsets / ctx.m_Size;
         int last = (ctx.m_Rank + 1) * numItemsets / ctx.m_Size;
 
-        auto firstIt = std::advance(fsets.m_KthItemsetCounts[i].begin(), first);
-        auto lastIt = std::advance(firstIt, last - first);
+        auto firstIt = itemsets.begin();
+        std::advance(firstIt, first);
+
+        auto lastIt = firstIt;
+        std::advance(firstIt, last - first);
+        
         for (;firstIt != lastIt; ++firstIt)
         {
             const auto& itemset = firstIt->first;
-            GenerateRulesR(itemset, itemset, rules);
+            float support = fsets.GetSupport(itemset);
+            GenerateRulesR(itemset, itemset, rules, support, fsets, params);
         }
-
     }
 
     return rules;
