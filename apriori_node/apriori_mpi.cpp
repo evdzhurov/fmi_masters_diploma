@@ -10,6 +10,7 @@
 #include <sstream>
 #include <algorithm>
 
+#include <unistd.h>
 #include <mpi.h>
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -486,8 +487,22 @@ std::vector<Rule> GenerateRules(const FrequentItemsts& fsets, const Params& para
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
+void DebugAttachWait()
+{
+    volatile int i = 0;
+    char hostname[256];
+    gethostname(hostname, sizeof(hostname));
+    printf("PID %d on %s is ready for attach\n", getpid(), hostname);
+    fflush(stdout);
+    while(i == 0) 
+        sleep(5);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
+    DebugAttachWait();
+
     MPI_Init(&argc, &argv);
 
     MPIContext ctx;
@@ -522,7 +537,7 @@ int main(int argc, char* argv[])
     params.Print();
 
     auto fsets = Apriori(k_SampleData, params, ctx);
-    auto rules = GenerateRules(fsets, params, ctx);
+    //auto rules = GenerateRules(fsets, params, ctx);
 
     MPI_Finalize();
     std::cout << "\n======================= MPI FINALIZED =======================\n\n";
