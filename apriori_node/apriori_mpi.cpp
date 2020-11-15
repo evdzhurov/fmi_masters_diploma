@@ -138,6 +138,26 @@ struct FrequentItemsts
         return itItemset->second / (float)m_NumTrans;
     }
 
+    void Print()
+    {
+        std::cout << "ItemMap:\n";
+        m_ItemMap.Print();
+
+        std::cout << "\nNum transactions: " << m_NumTrans << '\n';
+
+        std::cout << "Itemset counts:\n";
+
+        for (const auto& pair : m_KthItemsetCounts)
+        {
+            std::cout << "K=" << pair.first << '\n';
+            for (const auto& itemsetCount : pair.second)
+            {
+                std::cout << itemsetCount.first.ToString();
+                std::cout << " count: " << itemsetCount.second << '\n';
+            }
+        }
+    }
+
     ItemMap m_ItemMap;
     std::unordered_map<int, ItemsetCounts> m_KthItemsetCounts;
     int m_NumTrans = 0;
@@ -187,14 +207,12 @@ FrequentItemsts Apriori(const InputData& data, const Params& params, const MPICo
         }
     }
 
-    fsets.m_ItemMap.Print();
-
     ///////////////////////////////////////////////////////////////////////////////////////////
     auto count = [&](const Itemsets& itemsets, int k) 
     {
         int first = ctx.m_Rank * fsets.m_NumTrans / ctx.m_Size;
         int last = (ctx.m_Rank + 1) * fsets.m_NumTrans / ctx.m_Size;
-        auto counts = fsets.m_KthItemsetCounts[k];
+        auto& counts = fsets.m_KthItemsetCounts[k];
 
         for (int i = first; i < last; ++i)
         {
@@ -537,6 +555,10 @@ int main(int argc, char* argv[])
     params.Print();
 
     auto fsets = Apriori(k_SampleData, params, ctx);
+
+    std::cout << "Frequent Itemsets:\n";
+    fsets.Print();
+
     //auto rules = GenerateRules(fsets, params, ctx);
 
     MPI_Finalize();
