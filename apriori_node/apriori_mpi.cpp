@@ -6,9 +6,9 @@
 #include <iostream>
 #include <vector>
 #include <map>
-#include <unordered_map>
 #include <sstream>
 #include <algorithm>
+#include <iomanip>
 
 #include <unistd.h>
 #include <mpi.h>
@@ -19,6 +19,34 @@ struct Params
     int     m_MaxK = 2;
     float   m_MinSup = 0.05f;
     float   m_MinConf = 0.8f;
+    bool    m_WaitAttach = false;
+
+    void Parse(int argc, char** argv)
+    {
+        // Read command line arguments
+        for (int i = 1; i < argc; ++i)
+        {
+            if (strcmp(argv[i], "--max_k") == 0 && i + 1 < argc)
+            {
+                m_MaxK = std::atoi(argv[i + 1]);
+                ++i;
+            }
+            else if (strcmp(argv[i], "--min_conf") == 0 && i + 1 < argc)
+            {
+                m_MinConf = std::atof(argv[i + 1]);
+                ++i;
+            }
+            else if (strcmp(argv[i], "--min_sup") == 0 && i + 1 < argc)
+            {
+                m_MinSup = std::atof(argv[i + 1]);
+                ++i;
+            }
+            else if (strcmp(argv[i], "--wait_attach") == 0)
+            {
+                m_WaitAttach = true;
+            }
+        }
+    }
 
     void Print()
     {
@@ -61,14 +89,14 @@ struct ItemMap
         std::cout << "ItemMap:\n";
         for (const auto& pair : m_ItemToId)
         {
-            std::cout << '\t' << pair.first << " -> " << pair.second << '\n';
+            std::cout << pair.first << ": " << pair.second << '\n';
         }
         std::cout << '\n';
     }
 
     int m_NextId = 0;
-    std::unordered_map<std::string, int> m_ItemToId;
-    std::unordered_map<int, std::string> m_IdToItem;
+    std::map<std::string, int> m_ItemToId;
+    std::map<int, std::string> m_IdToItem;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -86,13 +114,31 @@ struct Itemset
 
         for (int i = 0; i < Size(); ++i)
         {
-            if (m_Items[i] < other.m_Items[i])
+            if (m_Items[i] != other.m_Items[i])
             {
-                return true;
+                return m_Items[i] < other.m_Items[i];
             }
         }
 
-        return false;
+        return false; // same
+    }
+
+    std::vector<Itemset> Subsets() const
+    {
+        std::vector<Itemset> result;
+        int size = m_Items.size();
+        for (int i = 0; i < size; ++i)
+        {
+            Itemset subset;
+            subset.m_Items.reserve(size-1);
+            auto first = std::begin(m_Items);
+            auto leaveOneOut = first + i;
+            auto last = std::end(m_Items);
+            std::copy(first, leaveOneOut, std::back_inserter(subset.m_Items));
+            std::copy(leaveOneOut + 1, last, std::back_inserter(subset.m_Items));
+            result.emplace_back(std::move(subset));
+        }
+        return result;
     }
 
     void FromString(const std::string& str)
@@ -110,9 +156,10 @@ struct Itemset
     {
         if (m_Items.empty()) return "";
         std::stringstream ss;
+        ss << '<';
         for (int i = 0; i < m_Items.size() - 1; ++i)
-            ss << m_Items[i] << '|';
-        ss << m_Items.back();
+            ss << m_Items[i] << ',';
+        ss << m_Items.back() << '>';
         return ss.str();
     }
 
@@ -140,11 +187,8 @@ struct FrequentItemsts
 
     void Print()
     {
-        std::cout << "ItemMap:\n";
         m_ItemMap.Print();
-
         std::cout << "\nNum transactions: " << m_NumTrans << '\n';
-
         std::cout << "Itemset counts:\n";
 
         for (const auto& pair : m_KthItemsetCounts)
@@ -153,13 +197,13 @@ struct FrequentItemsts
             for (const auto& itemsetCount : pair.second)
             {
                 std::cout << itemsetCount.first.ToString();
-                std::cout << " count: " << itemsetCount.second << '\n';
+                std::cout << ": " << itemsetCount.second << '\n';
             }
         }
     }
 
     ItemMap m_ItemMap;
-    std::unordered_map<int, ItemsetCounts> m_KthItemsetCounts;
+    std::map<int, ItemsetCounts> m_KthItemsetCounts;
     int m_NumTrans = 0;
 };
 
@@ -169,7 +213,9 @@ struct Rule
     std::string ToString() const
     {
         std::stringstream ss;
-        ss << '{' << m_Antidecent.c_str() << "} => {" << m_Consequent.c_str() << '}';
+        ss << m_Antidecent.c_str() << " => " << m_Consequent.c_str();
+        ss << " | " << std::left << std::setprecision(5) << std::setw(10) << m_Confidence;
+        ss << " | " << std::left << std::setprecision(5) << std::setw(10) << m_Lift;
         return ss.str();
     }
 
@@ -293,7 +339,7 @@ FrequentItemsts Apriori(const InputData& data, const Params& params, const MPICo
 
         // Merge counts from all processes into local data
         counts.clear();
-        for (int i = 1; i < globalCountsSize; ++i)
+        for (int i = 1; i < globalCountsSize; i+=2)
         {
             counts[Itemset(globalCounts[i-1])] += globalCounts[i];
         }
@@ -385,9 +431,9 @@ FrequentItemsts Apriori(const InputData& data, const Params& params, const MPICo
     {
         std::vector<Itemset> c1;
         c1.reserve(fsets.m_ItemMap.m_ItemToId.size());
-        for (const auto& pair: fsets.m_ItemMap.m_ItemToId)
+        for (const auto& pair: fsets.m_ItemMap.m_IdToItem)
         {
-            c1.emplace_back(pair.second);
+            c1.emplace_back(pair.first);
         }
         count(c1, 1);
         gather_1();
@@ -395,9 +441,54 @@ FrequentItemsts Apriori(const InputData& data, const Params& params, const MPICo
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////
-    auto gen_Lk = [](const Itemsets& itemsets, int k) -> Itemsets
+    auto gen_Lk = [&](const Itemsets& itemsets, int k) -> Itemsets
     {
-        return Itemsets();
+        Itemsets result;
+
+        const auto& counts = fsets.m_KthItemsetCounts[k-1]; // Counts for k-1 subsets
+        
+        auto same_prefix = [](const Itemset& lhs, const Itemset& rhs)
+        {
+            if (lhs.m_Items.size() != rhs.m_Items.size()) return false;
+            for (int i = 0; i < lhs.m_Items.size() - 1; ++i)
+            {
+                if (lhs.m_Items[i] != rhs.m_Items[i]) return false; // Mismatch
+            }
+            return true; // Same (size - 1) prefix
+        };
+
+        for (int i = 0; i < itemsets.size(); ++i)
+        {
+            const auto& lhs = itemsets[i];
+
+            for (int j = i+1; j < itemsets.size(); ++j)
+            {    
+                const auto& rhs = itemsets[j];
+
+                // Require same prefix
+                if (!same_prefix(lhs, rhs)) break;
+
+                // Create new itemset (lhs + last element of rhs)
+                Itemset itemset = lhs;
+                itemset.m_Items.push_back(rhs.m_Items.back());
+
+                // Check if all k-1 subsets are frequent
+                bool valid = true;
+                for (const auto& subset : itemset.Subsets())
+                {
+                    if (counts.find(subset) == counts.end())
+                    {
+                        valid = false;
+                        break;
+                    }
+                }
+
+                if (valid) 
+                    result.emplace_back(std::move(itemset));
+            }
+        }
+
+        return result;
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////
@@ -419,24 +510,6 @@ FrequentItemsts Apriori(const InputData& data, const Params& params, const MPICo
 ///////////////////////////////////////////////////////////////////////////////////////////
 void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float support, const FrequentItemsts& fsets, const Params& params)
 {
-    auto subsetsOf = [](const Itemset& itemset) -> Itemsets
-    {
-        Itemsets result;
-        int size = itemset.Size();
-        for (int i = 0; i < size; ++i)
-        {
-            Itemset subset;
-            subset.m_Items.reserve(size-1);
-            auto first = std::begin(itemset.m_Items);
-            auto leaveOneOut = first + i;
-            auto last = std::end(itemset.m_Items);
-            std::copy(first, leaveOneOut, std::back_inserter(subset.m_Items));
-            std::copy(leaveOneOut + 1, last, std::back_inserter(subset.m_Items));
-            result.emplace_back(std::move(subset));
-        }
-        return result;
-    };
-
     auto subtract = [](const Itemset& lhs, const Itemset& rhs) -> Itemset
     {
         Itemset result;
@@ -448,7 +521,7 @@ void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float 
         return result;
     };
 
-    for (const auto& itemset : subsetsOf(rhs))
+    for (const auto& itemset : rhs.Subsets())
     {
         float conf = support / fsets.GetSupport(itemset);
         if (conf >= params.m_MinConf)
@@ -459,6 +532,8 @@ void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float 
             rule.m_Consequent = consequent.ToString();
             rule.m_Confidence = conf;
             rule.m_Lift = conf / fsets.GetSupport(consequent);
+
+            rules.push_back(std::move(rule));
 
             if (itemset.m_Items.size() > 1)
                 GenerateRulesR(lhs, itemset, rules, support, fsets, params);
@@ -471,7 +546,7 @@ std::vector<Rule> GenerateRules(const FrequentItemsts& fsets, const Params& para
 {
     std::vector<Rule> rules;
 
-    for (int i = 1; i <= params.m_MaxK; ++i)
+    for (int i = 2; i <= params.m_MaxK; ++i)
     {
         // Partition itemsets equally
         auto it = fsets.m_KthItemsetCounts.find(i);
@@ -491,7 +566,7 @@ std::vector<Rule> GenerateRules(const FrequentItemsts& fsets, const Params& para
         std::advance(firstIt, first);
 
         auto lastIt = firstIt;
-        std::advance(firstIt, last - first);
+        std::advance(lastIt, last - first);
         
         for (;firstIt != lastIt; ++firstIt)
         {
@@ -519,47 +594,37 @@ void DebugAttachWait()
 ///////////////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
-    DebugAttachWait();
+    Params params;
+
+    params.Parse(argc, argv);
+    params.Print();
+
+    if (params.m_WaitAttach)
+    {
+        DebugAttachWait();
+    }
 
     MPI_Init(&argc, &argv);
 
     MPIContext ctx;
-
     MPI_Comm_size(MPI_COMM_WORLD, &ctx.m_Size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &ctx.m_Rank);
 
     std::cout << "\n======================= MPI INITIALIZED =======================\n";
     std::cout << "MPI rank " << ctx.m_Rank << '/' << ctx.m_Size << '\n';
 
-    Params params;
-
-    // Read command line arguments
-    for (int i = 1; i < argc; ++i)
-    {
-        if (strcmp(argv[i], "--max_k") == 0 && i + 1 < argc)
-        {
-            params.m_MaxK = std::atoi(argv[i + 1]);
-            ++i;
-        }
-        else if (strcmp(argv[i], "--min_conf") == 0 && i + 1 < argc)
-        {
-            params.m_MinConf = std::atof(argv[i + 1]);
-            ++i;
-        }
-        else if (strcmp(argv[i], "--min_sup") == 0 && i + 1 < argc)
-        {
-            params.m_MinSup = std::atof(argv[i + 1]);
-        }
-    }
-
-    params.Print();
-
     auto fsets = Apriori(k_SampleData, params, ctx);
 
     std::cout << "Frequent Itemsets:\n";
     fsets.Print();
 
-    //auto rules = GenerateRules(fsets, params, ctx);
+    auto rules = GenerateRules(fsets, params, ctx);
+
+    std::cout << "Rule | Confidence | Lift\n";
+    for (const auto& rule : rules)
+    {
+        std::cout << rule.ToString() << '\n';
+    }
 
     MPI_Finalize();
     std::cout << "\n======================= MPI FINALIZED =======================\n\n";

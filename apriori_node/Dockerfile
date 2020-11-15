@@ -8,7 +8,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Install packages
 RUN apt-get update && \ 
-    apt-get install -y autoconf automake gcc g++ make wget curl openssh-server inetutils-ping
+    apt-get install -y autoconf automake gcc g++ make wget curl openssh-server
 
 # Build MPI
 RUN cd /usr/local/src/ && \
@@ -32,7 +32,15 @@ EXPOSE 22
 RUN mkdir /var/run/sshd
 
 # --------------------------------------------------------------------------------------
-FROM mpi_node AS apriori_node
+FROM mpi_node AS mpi_dev_node
+
+LABEL maintainer="edj@fastmail.fm"
+
+RUN apt-get update && \
+    apt-get install -y inetutils-ping gdb
+
+# --------------------------------------------------------------------------------------
+FROM mpi_dev_node AS apriori_node
 
 LABEL maintainer="edj@fastmail.fm"
 
