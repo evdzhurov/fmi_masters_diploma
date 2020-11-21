@@ -1,0 +1,17 @@
+   support             itemsets
+0     0.75               (Milk)
+1     0.75               (Eggs)
+2     0.50              (Bread)
+3     0.25              (Apple)
+4     0.50         (Eggs, Milk)
+5     0.50        (Bread, Milk)
+6     0.25        (Eggs, Bread)
+7     0.25  (Eggs, Bread, Milk)
+8     0.25        (Eggs, Apple)
+
+Output:
+
+     antecedents consequents  antecedent support  consequent support  support  confidence      lift  leverage  conviction
+0        (Bread)      (Milk)                0.50                0.75     0.50         1.0  1.333333    0.1250         inf
+1  (Eggs, Bread)      (Milk)                0.25                0.75     0.25         1.0  1.333333    0.0625         inf
+2        (Apple)      (Eggs)                0.25                0.75     0.25         1.0  1.333333    0.0625         inf

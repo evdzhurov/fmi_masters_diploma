@@ -45,6 +45,12 @@
         "vector": "cpp",
         "xhash": "cpp",
         "xtree": "cpp",
-        "cassert": "cpp"
+        "cassert": "cpp",
+        "algorithm": "cpp",
+        "ctime": "cpp",
+        "fstream": "cpp",
+        "iomanip": "cpp",
+        "xlocmon": "cpp",
+        "xloctime": "cpp"
     }
 }

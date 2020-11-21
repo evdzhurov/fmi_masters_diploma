@@ -2,11 +2,13 @@
 #include <cstring>
 #include <cstdlib>
 #include <cassert>
+#include <cctype>
 
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <vector>
 #include <map>
-#include <sstream>
 #include <algorithm>
 #include <iomanip>
 
@@ -16,36 +18,57 @@
 ///////////////////////////////////////////////////////////////////////////////////////////
 struct Params
 {
-    int     m_MaxK = 2;
-    float   m_MinSup = 0.05f;
-    float   m_MinConf = 0.8f;
-    bool    m_WaitAttach = false;
+    Params(int argc, char** argv)
+        : m_ArgC(argc)
+        , m_ArgV(argv)
+    {}
 
-    void Parse(int argc, char** argv)
+    bool WaitAttach()
     {
-        // Read command line arguments
-        for (int i = 1; i < argc; ++i)
+        for (int i = 1; i < m_ArgC; ++i)
         {
-            if (strcmp(argv[i], "--max_k") == 0 && i + 1 < argc)
+            if (strcmp(m_ArgV[i], "--wait_attach") == 0)
             {
-                m_MaxK = std::atoi(argv[i + 1]);
-                ++i;
-            }
-            else if (strcmp(argv[i], "--min_conf") == 0 && i + 1 < argc)
-            {
-                m_MinConf = std::atof(argv[i + 1]);
-                ++i;
-            }
-            else if (strcmp(argv[i], "--min_sup") == 0 && i + 1 < argc)
-            {
-                m_MinSup = std::atof(argv[i + 1]);
-                ++i;
-            }
-            else if (strcmp(argv[i], "--wait_attach") == 0)
-            {
-                m_WaitAttach = true;
+                return true;
             }
         }
+        return false;
+    }
+
+    bool Parse()
+    {
+        // Read command line arguments
+        for (int i = 1; i < m_ArgC; ++i)
+        {
+            if (strcmp(m_ArgV[i], "--input") == 0 && i + 1 < m_ArgC)
+            {
+                m_InputFile = m_ArgV[i+1];
+                ++i;
+            }
+            else if (strcmp(m_ArgV[i], "--max_k") == 0 && i + 1 < m_ArgC)
+            {
+                m_MaxK = std::atoi(m_ArgV[i + 1]);
+                ++i;
+            }
+            else if (strcmp(m_ArgV[i], "--min_conf") == 0 && i + 1 < m_ArgC)
+            {
+                m_MinConf = std::atof(m_ArgV[i + 1]);
+                ++i;
+            }
+            else if (strcmp(m_ArgV[i], "--min_sup") == 0 && i + 1 < m_ArgC)
+            {
+                m_MinSup = std::atof(m_ArgV[i + 1]);
+                ++i;
+            }
+        }
+
+        if (m_InputFile.empty())
+        {
+            std::cout << "Usage: --input <file>\n";
+            return false;
+        }
+
+        return true;
     }
 
     void Print()
@@ -55,6 +78,15 @@ struct Params
         std::cout << "min_sup = " << m_MinSup << ", ";
         std::cout << "min_conf = " << m_MinConf << ")\n";
     }
+
+    int             m_MaxK = 2;
+    float           m_MinSup = 0.05f;
+    float           m_MinConf = 0.8f;
+    std::string     m_InputFile;
+
+    private:
+    int     m_ArgC = 0;
+    char**  m_ArgV = nullptr;
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -152,14 +184,25 @@ struct Itemset
         }
     }
 
-    std::string ToString() const
+    std::string ToString(const ItemMap& imap) const
     {
         if (m_Items.empty()) return "";
         std::stringstream ss;
         ss << '<';
+
+        auto getItemName = [&](int itemId) -> const char*
+        {
+            auto str = imap.GetItem(itemId);
+            return str ? str->c_str() : "MISSING";
+        };
+
         for (int i = 0; i < m_Items.size() - 1; ++i)
-            ss << m_Items[i] << ',';
-        ss << m_Items.back() << '>';
+        {
+            auto str = imap.GetItem(m_Items[i]);
+            ss << getItemName(m_Items[i]) << ',';
+        }
+        ss << getItemName(m_Items.back()) << '>';
+        
         return ss.str();
     }
 
@@ -193,11 +236,10 @@ struct FrequentItemsts
 
         for (const auto& pair : m_KthItemsetCounts)
         {
-            std::cout << "K=" << pair.first << '\n';
             for (const auto& itemsetCount : pair.second)
             {
-                std::cout << itemsetCount.first.ToString();
-                std::cout << ": " << itemsetCount.second << '\n';
+                std::cout << std::left << std::setw(20) << itemsetCount.first.ToString(m_ItemMap);
+                std::cout << std::setprecision(5) << itemsetCount.second / (float)m_NumTrans << '\n';
             }
         }
     }
@@ -213,7 +255,8 @@ struct Rule
     std::string ToString() const
     {
         std::stringstream ss;
-        ss << m_Antidecent.c_str() << " => " << m_Consequent.c_str();
+        ss << std::left << std::setw(20) << m_Antidecent.c_str() << " => ";
+        ss << std::left << std::setw(20) << m_Consequent.c_str();
         ss << " | " << std::left << std::setprecision(5) << std::setw(10) << m_Confidence;
         ss << " | " << std::left << std::setprecision(5) << std::setw(10) << m_Lift;
         return ss.str();
@@ -229,12 +272,6 @@ using Rules = std::vector<Rule>;
 ///////////////////////////////////////////////////////////////////////////////////////////
 using InputData = std::vector<std::vector<std::string>>; // Raw transactions
 using OutputData = std::vector<std::string>;
-
-static const InputData k_SampleData = {
-    {"milk", "cheese", "oats", "carrots"},
-    {"cheese", "oats", "onions" },
-    {"milk", "cheese", "bread"}
-};
 
 FrequentItemsts Apriori(const InputData& data, const Params& params, const MPIContext& ctx)
 {
@@ -527,9 +564,9 @@ void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float 
         if (conf >= params.m_MinConf)
         {
             Rule rule;
-            rule.m_Antidecent = itemset.ToString();
+            rule.m_Antidecent = itemset.ToString(fsets.m_ItemMap);
             Itemset consequent = subtract(lhs, itemset);
-            rule.m_Consequent = consequent.ToString();
+            rule.m_Consequent = consequent.ToString(fsets.m_ItemMap);
             rule.m_Confidence = conf;
             rule.m_Lift = conf / fsets.GetSupport(consequent);
 
@@ -592,16 +629,60 @@ void DebugAttachWait()
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
+bool ReadInputData(const std::string& file, InputData& outData)
+{
+    std::ifstream ifs(file);
+    if (!ifs.is_open()) return false;
+
+    for (std::string line; std::getline(ifs, line);)
+    {
+        outData.emplace_back();
+        std::stringstream ss(line);
+        for (std::string item; std::getline(ss, item, ',');)
+        {
+            // Trim leading whitespace
+            item.erase(item.begin(), std::find_if(item.begin(), item.end(), [](unsigned char c){
+                return !std::isspace(c);
+            }));
+
+            // Trim trailing whitespace
+            item.erase(std::find_if(item.rbegin(), item.rend(), [](unsigned char c){
+                return !std::isspace(c);
+            }).base(), item.end());
+            
+            if (!item.empty())
+                outData.back().emplace_back(item);
+        }
+    }
+
+    return true;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char* argv[])
 {
-    Params params;
+    Params params(argc, argv);
 
-    params.Parse(argc, argv);
-    params.Print();
-
-    if (params.m_WaitAttach)
+    if (params.WaitAttach())
     {
         DebugAttachWait();
+    }
+
+    if (!params.Parse())
+    {
+        std::cout << "Error parsing arguments!\n";
+        return 1;
+    }
+    else
+    {
+        params.Print();
+    }
+
+    InputData samples;
+    if (!ReadInputData(params.m_InputFile, samples))
+    {
+        std::cout << "Error reading input data from file!\n";
+        return 1;
     }
 
     MPI_Init(&argc, &argv);
@@ -613,14 +694,14 @@ int main(int argc, char* argv[])
     std::cout << "\n======================= MPI INITIALIZED =======================\n";
     std::cout << "MPI rank " << ctx.m_Rank << '/' << ctx.m_Size << '\n';
 
-    auto fsets = Apriori(k_SampleData, params, ctx);
+    auto fsets = Apriori(samples, params, ctx);
 
     std::cout << "Frequent Itemsets:\n";
     fsets.Print();
 
     auto rules = GenerateRules(fsets, params, ctx);
 
-    std::cout << "Rule | Confidence | Lift\n";
+    std::cout << "\nRule | Confidence | Lift\n";
     for (const auto& rule : rules)
     {
         std::cout << rule.ToString() << '\n';
