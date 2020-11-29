@@ -184,7 +184,7 @@ struct Itemset
         }
     }
 
-    std::string ToString(const ItemMap& imap) const
+    std::string ToString(const ItemMap& imap, char delim = ',') const
     {
         if (m_Items.empty()) return "";
         std::stringstream ss;
@@ -199,7 +199,7 @@ struct Itemset
         for (int i = 0; i < m_Items.size() - 1; ++i)
         {
             auto str = imap.GetItem(m_Items[i]);
-            ss << getItemName(m_Items[i]) << ',';
+            ss << getItemName(m_Items[i]) << delim;
         }
         ss << getItemName(m_Items.back()) << '>';
         
@@ -213,7 +213,7 @@ using Itemsets = std::vector<Itemset>;
 using ItemsetCounts = std::map<Itemset, int>;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-struct FrequentItemsts
+struct FrequentItemsets
 {
     float GetSupport(const Itemset& itemset) const
     {
@@ -244,6 +244,25 @@ struct FrequentItemsts
         }
     }
 
+    bool ToCsv(const std::string& file)
+    {
+        std::ofstream ofs(file, std::ios::trunc);
+        if (!ofs.is_open()) return false;
+
+        ofs << "Itemset, Frequency\n"; // Column Names
+
+        for (const auto& pair : m_KthItemsetCounts)
+        {
+            for (const auto& itemsetCount : pair.second)
+            {
+                ofs << itemsetCount.first.ToString(m_ItemMap, ':') << ", ";
+                ofs << std::setprecision(5) << itemsetCount.second / (float)m_NumTrans << '\n';
+            }
+        }
+        
+        return true;
+    }
+
     ItemMap m_ItemMap;
     std::map<int, ItemsetCounts> m_KthItemsetCounts;
     int m_NumTrans = 0;
@@ -252,18 +271,18 @@ struct FrequentItemsts
 ///////////////////////////////////////////////////////////////////////////////////////////
 struct Rule
 {
-    std::string ToString() const
+    std::string ToString(const FrequentItemsets& fsets) const
     {
         std::stringstream ss;
-        ss << std::left << std::setw(20) << m_Antidecent.c_str() << " => ";
-        ss << std::left << std::setw(20) << m_Consequent.c_str();
+        ss << std::left << std::setw(20) << m_Antidecent.ToString(fsets.m_ItemMap).c_str() << " => ";
+        ss << std::left << std::setw(20) << m_Consequent.ToString(fsets.m_ItemMap).c_str();
         ss << " | " << std::left << std::setprecision(5) << std::setw(10) << m_Confidence;
         ss << " | " << std::left << std::setprecision(5) << std::setw(10) << m_Lift;
         return ss.str();
     }
 
-    std::string m_Antidecent;
-    std::string m_Consequent;
+    Itemset m_Antidecent;
+    Itemset m_Consequent;
     float m_Confidence = 0.f;
     float m_Lift = 0.f;
 };
@@ -273,9 +292,9 @@ using Rules = std::vector<Rule>;
 using InputData = std::vector<std::vector<std::string>>; // Raw transactions
 using OutputData = std::vector<std::string>;
 
-FrequentItemsts Apriori(const InputData& data, const Params& params, const MPIContext& ctx)
+FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIContext& ctx)
 {
-    FrequentItemsts fsets;
+    FrequentItemsets fsets;
     fsets.m_NumTrans = data.size();
 
     std::vector<std::vector<int>> transactions;
@@ -545,7 +564,7 @@ FrequentItemsts Apriori(const InputData& data, const Params& params, const MPICo
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float support, const FrequentItemsts& fsets, const Params& params)
+void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float support, const FrequentItemsets& fsets, const Params& params)
 {
     auto subtract = [](const Itemset& lhs, const Itemset& rhs) -> Itemset
     {
@@ -564,11 +583,10 @@ void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float 
         if (conf >= params.m_MinConf)
         {
             Rule rule;
-            rule.m_Antidecent = itemset.ToString(fsets.m_ItemMap);
-            Itemset consequent = subtract(lhs, itemset);
-            rule.m_Consequent = consequent.ToString(fsets.m_ItemMap);
+            rule.m_Antidecent = itemset;
+            rule.m_Consequent = subtract(lhs, itemset);
             rule.m_Confidence = conf;
-            rule.m_Lift = conf / fsets.GetSupport(consequent);
+            rule.m_Lift = conf / fsets.GetSupport(rule.m_Consequent);
 
             rules.push_back(std::move(rule));
 
@@ -579,7 +597,7 @@ void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float 
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-std::vector<Rule> GenerateRules(const FrequentItemsts& fsets, const Params& params, const MPIContext& ctx)
+std::vector<Rule> GenerateRules(const FrequentItemsets& fsets, const Params& params, const MPIContext& ctx)
 {
     std::vector<Rule> rules;
 
@@ -614,6 +632,26 @@ std::vector<Rule> GenerateRules(const FrequentItemsts& fsets, const Params& para
     }
 
     return rules;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+bool RulesToCsv(const FrequentItemsets& fsets, const std::vector<Rule> rules, const std::string& file)
+{
+    if (rules.empty()) return false;
+
+    std::ofstream ofs(file, std::ios::trunc);
+    if (!ofs.is_open()) return false;
+
+    ofs << "Antidecent, Consequent, Confidence, Lift\n"; // Columns names
+    for (const auto& rule : rules)
+    {
+        ofs << rule.m_Antidecent.ToString(fsets.m_ItemMap, ':').c_str() << ", ";
+        ofs << rule.m_Consequent.ToString(fsets.m_ItemMap, ':').c_str() << ", ";
+        ofs << std::setprecision(5) << rule.m_Confidence << ", ";
+        ofs << std::setprecision(5) << rule.m_Lift << '\n';
+    }
+
+    return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -698,14 +736,17 @@ int main(int argc, char* argv[])
 
     std::cout << "Frequent Itemsets:\n";
     fsets.Print();
+    fsets.ToCsv("frequent_itemsets.csv");
 
     auto rules = GenerateRules(fsets, params, ctx);
 
     std::cout << "\nRule | Confidence | Lift\n";
     for (const auto& rule : rules)
     {
-        std::cout << rule.ToString() << '\n';
+        std::cout << rule.ToString(fsets) << '\n';
     }
+
+    RulesToCsv(fsets, rules, "rules.csv");
 
     MPI_Finalize();
     std::cout << "\n======================= MPI FINALIZED =======================\n\n";
