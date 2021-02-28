@@ -1,0 +1,38 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "This is a master's diploma project in Distributed Systems and Mobile Technologies at FMI Sofia University",
+        "title": "Distributed Apriori API",
+        "contact": {
+            "name": "Evgeniy Dzhurov",
+            "email": "edzhurov@uni-sofia.bg"
+        },
+        "version": "1.0"
+    },
+    "paths": {
+        "/accounts/{id}": {
+            "get": {
+                "description": "get string by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "accounts"
+                ],
+                "summary": "Show an account",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ]
+            }
+        }
+    }
+}
