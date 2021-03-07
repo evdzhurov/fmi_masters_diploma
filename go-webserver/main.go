@@ -5,38 +5,48 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
+	"edj/apriori/controller"
 	_ "edj/apriori/docs"
 )
 
-// @title Distributed Apriori API
+// @title Distributed System for Apriori Data Mining
 // @version 1.0
-// @description This is a master's diploma project in Distributed Systems and Mobile Technologies at FMI Sofia University
-
+// @description Master's diploma project in Distributed Systems and Mobile Technologies at FMI Sofia University, 2021
 // @contact.name Evgeniy Dzhurov
 // @contact.email edzhurov@uni-sofia.bg
 
-// Test godoc
-// @Summary Show an account
-// @Description get string by ID
-// @Tags accounts
-// @Accept  json
-// @Produce  json
-// @Param id path int true "Account ID"
-// @Router /accounts/{id} [get]
-func Test(ctx *gin.Context) {
-}
-
 func main() {
-	r := gin.Default()
+	router := gin.Default()
 
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "pong",
-		})
-	})
+	c := controller.NewController()
 
-	//url := ginSwagger.URL("http://localhost:8080/swagger/doc.json")
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	router.GET("", c.ShowDashboard)
 
-	r.Run() // listen and serve on 0.0.0.0:8080 (for Windows - localhost:8080)
+	data := router.Group("/data/csv")
+	{
+		data.POST("", c.AddDataCsv)
+		data.GET("", c.ListDataCsv)
+		data.GET(":id", c.ShowDataCsv)
+		data.DELETE(":id", c.DeleteDataCsv)
+	}
+
+	jobs := router.Group("/jobs")
+	{
+		jobs.POST("", c.AddJob)
+		jobs.GET("", c.ListJobs)
+		jobs.GET(":id", c.ShowJob)
+		jobs.DELETE(":id", c.DeleteJob)
+	}
+
+	workers := router.Group("/workers")
+	{
+		workers.POST("", c.AddWorker)
+		workers.GET("", c.ListWorkers)
+		workers.GET(":id", c.ShowWorker)
+		workers.DELETE(":id", c.DeleteWorker)
+	}
+
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
+	router.Run() // listen and serve on 0.0.0.0:8080 (for Windows - localhost:8080)
 }

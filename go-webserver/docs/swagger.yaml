@@ -2,25 +2,120 @@ info:
   contact:
     email: edzhurov@uni-sofia.bg
     name: Evgeniy Dzhurov
-  description: This is a master's diploma project in Distributed Systems and Mobile
-    Technologies at FMI Sofia University
-  title: Distributed Apriori API
+  description: Master's diploma project in Distributed Systems and Mobile Technologies
+    at FMI Sofia University, 2021
+  title: Distributed System for Apriori Data Mining
   version: "1.0"
 paths:
-  /accounts/{id}:
+  /:
     get:
       consumes:
       - application/json
-      description: get string by ID
-      parameters:
-      - description: Account ID
-        in: path
-        name: id
-        required: true
-        type: integer
       produces:
       - application/json
-      summary: Show an account
+      summary: Show the dashboard
       tags:
-      - accounts
+      - dashboard
+  /data/csv:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      summary: List csv data
+      tags:
+      - data
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      summary: Upload csv data
+      tags:
+      - data
+  /data/csv/{id}:
+    delete:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      summary: Delete existing csv data
+      tags:
+      - data
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      summary: Show specific csv data
+      tags:
+      - data
+  /jobs:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      summary: List existing jobs
+      tags:
+      - jobs
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      summary: Upload csv data
+      tags:
+      - jobs
+  /jobs/{id}:
+    delete:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      summary: Delete existing job
+      tags:
+      - jobs
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      summary: Show specific job
+      tags:
+      - jobs
+  /workers:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      summary: List existing workers
+      tags:
+      - workers
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      summary: Create worker
+      tags:
+      - workers
+  /workers/{id}:
+    delete:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      summary: Delete existing worker
+      tags:
+      - workers
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      summary: Show specific worker
+      tags:
+      - workers
 swagger: "2.0"
