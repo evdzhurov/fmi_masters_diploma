@@ -1,4 +1,4 @@
-module edj/apriori
+module edj/dist-apriori-websrv
 
 go 1.15
 

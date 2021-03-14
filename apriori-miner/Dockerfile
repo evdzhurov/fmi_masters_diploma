@@ -1,6 +1,6 @@
-FROM ubuntu AS mpi_node
+FROM ubuntu AS mpi-ubuntu
 
-LABEL maintainer="edj@fastmail.fm"
+LABEL maintainer="edzhurov@uni-sofia.bg"
 
 # Setup local time
 ENV TZ=Europe/Sofia
@@ -32,17 +32,17 @@ EXPOSE 22
 RUN mkdir /var/run/sshd
 
 # --------------------------------------------------------------------------------------
-FROM mpi_node AS mpi_dev_node
+FROM mpi-ubuntu AS mpi-dev-ubuntu
 
-LABEL maintainer="edj@fastmail.fm"
+LABEL maintainer="edzhurov@uni-sofia.bg"
 
 RUN apt-get update && \
     apt-get install -y inetutils-ping gdb
 
 # --------------------------------------------------------------------------------------
-FROM mpi_dev_node AS apriori_node
+FROM mpi-dev-ubuntu AS dist-apriori-miner
 
-LABEL maintainer="edj@fastmail.fm"
+LABEL maintainer="edzhurov@uni-sofia.bg"
 
 WORKDIR /usr/src/app
 

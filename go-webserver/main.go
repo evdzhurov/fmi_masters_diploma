@@ -5,8 +5,8 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
-	"edj/apriori/controller"
-	_ "edj/apriori/docs"
+	"edj/dist-apriori-websrv/controller"
+	_ "edj/dist-apriori-websrv/docs"
 )
 
 // @title Distributed System for Apriori Data Mining
