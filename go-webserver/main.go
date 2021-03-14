@@ -30,12 +30,12 @@ func main() {
 		data.DELETE(":id", c.DeleteDataCsv)
 	}
 
-	jobs := router.Group("/jobs")
+	jobs := router.Group("/tasks")
 	{
-		jobs.POST("", c.AddJob)
-		jobs.GET("", c.ListJobs)
-		jobs.GET(":id", c.ShowJob)
-		jobs.DELETE(":id", c.DeleteJob)
+		jobs.POST("", c.AddTask)
+		jobs.GET("", c.ListTasks)
+		jobs.GET(":id", c.ShowTask)
+		jobs.DELETE(":id", c.DeleteTask)
 	}
 
 	workers := router.Group("/workers")

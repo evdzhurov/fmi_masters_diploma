@@ -1,9 +1,15 @@
 version: "3.5"
 services:
-    apriori-worker:
-        image: apriori_node
+    dist-apriori-websrv:
+        image: dist-apriori-websrv
+        ports:
+            - "8080:80"
+        networks:
+            - dist-apriori-net
+    dist-apriori-miner:
+        image: dist-apriori-miner
         entrypoint: ["/usr/sbin/sshd", "-D"]
         networks:
-            - apriori-net
+            - dist-apriori-net
 networks:
-    apriori-net:
+    dist-apriori-net:

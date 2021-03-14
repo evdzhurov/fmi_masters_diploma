@@ -50,40 +50,40 @@ paths:
       summary: Show specific csv data
       tags:
       - data
-  /jobs:
+  /tasks:
     get:
       consumes:
       - application/json
       produces:
       - application/json
-      summary: List existing jobs
+      summary: List existing tasks
       tags:
-      - jobs
+      - tasks
     post:
       consumes:
       - application/json
       produces:
       - application/json
-      summary: Upload csv data
+      summary: Add new task
       tags:
-      - jobs
-  /jobs/{id}:
+      - tasks
+  /tasks/{id}:
     delete:
       consumes:
       - application/json
       produces:
       - application/json
-      summary: Delete existing job
+      summary: Delete existing task
       tags:
-      - jobs
+      - tasks
     get:
       consumes:
       - application/json
       produces:
       - application/json
-      summary: Show specific job
+      summary: Show specific task
       tags:
-      - jobs
+      - tasks
   /workers:
     get:
       consumes:

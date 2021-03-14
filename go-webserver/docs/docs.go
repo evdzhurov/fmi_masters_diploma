@@ -92,7 +92,7 @@ var doc = `{
                 "summary": "Delete existing csv data"
             }
         },
-        "/jobs": {
+        "/tasks": {
             "get": {
                 "consumes": [
                     "application/json"
@@ -101,9 +101,9 @@ var doc = `{
                     "application/json"
                 ],
                 "tags": [
-                    "jobs"
+                    "tasks"
                 ],
-                "summary": "List existing jobs"
+                "summary": "List existing tasks"
             },
             "post": {
                 "consumes": [
@@ -113,12 +113,12 @@ var doc = `{
                     "application/json"
                 ],
                 "tags": [
-                    "jobs"
+                    "tasks"
                 ],
-                "summary": "Upload csv data"
+                "summary": "Add new task"
             }
         },
-        "/jobs/{id}": {
+        "/tasks/{id}": {
             "get": {
                 "consumes": [
                     "application/json"
@@ -127,9 +127,9 @@ var doc = `{
                     "application/json"
                 ],
                 "tags": [
-                    "jobs"
+                    "tasks"
                 ],
-                "summary": "Show specific job"
+                "summary": "Show specific task"
             },
             "delete": {
                 "consumes": [
@@ -139,9 +139,9 @@ var doc = `{
                     "application/json"
                 ],
                 "tags": [
-                    "jobs"
+                    "tasks"
                 ],
-                "summary": "Delete existing job"
+                "summary": "Delete existing task"
             }
         },
         "/workers": {
