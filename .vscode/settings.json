@@ -52,5 +52,6 @@
         "iomanip": "cpp",
         "xlocmon": "cpp",
         "xloctime": "cpp"
-    }
+    },
+    "python.pythonPath": "/usr/bin/python3"
 }

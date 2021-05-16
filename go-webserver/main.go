@@ -20,6 +20,8 @@ func main() {
 
 	c := controller.NewController()
 
+	router.LoadHtmlGlob("templates/*")
+
 	router.GET("", c.ShowDashboard)
 
 	data := router.Group("/data/csv")

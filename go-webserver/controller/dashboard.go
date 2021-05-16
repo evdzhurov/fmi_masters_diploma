@@ -13,5 +13,8 @@ import (
 // @Produce  json
 // @Router / [get]
 func (c *Controller) ShowDashboard(ctx *gin.Context) {
-	ctx.JSON(http.StatusNotImplemented, "ShowDashboard")
+
+	ctx.HTML(http.StatusOk, "dashboard.html", gin.H{
+		"title" : "This is the dashboard"
+	})
 }
