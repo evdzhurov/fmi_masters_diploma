@@ -23,7 +23,7 @@ func (c *Controller) AddTask(ctx *gin.Context) {
 // @Produce  json
 // @Router /tasks [get]
 func (c *Controller) ListTasks(ctx *gin.Context) {
-	ctx.JSON(http.StatusNotImplemented, "ListTasks")
+	ctx.HTML(http.StatusOK, "tasks", gin.H{})
 }
 
 // ShowTask godoc
@@ -33,7 +33,7 @@ func (c *Controller) ListTasks(ctx *gin.Context) {
 // @Produce  json
 // @Router /tasks/{id} [get]
 func (c *Controller) ShowTask(ctx *gin.Context) {
-	ctx.JSON(http.StatusNotImplemented, "ShowTask")
+	ctx.HTML(http.StatusOK, "task_details", gin.H{})
 }
 
 // DeleteTask godoc

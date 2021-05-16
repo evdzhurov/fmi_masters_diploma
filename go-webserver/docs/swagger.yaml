@@ -16,7 +16,7 @@ paths:
       summary: Show the dashboard
       tags:
       - dashboard
-  /data/csv:
+  /data:
     get:
       consumes:
       - application/json
@@ -33,7 +33,7 @@ paths:
       summary: Upload csv data
       tags:
       - data
-  /data/csv/{id}:
+  /data/{id}:
     delete:
       consumes:
       - application/json

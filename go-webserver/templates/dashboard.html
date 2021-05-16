@@ -1,5 +1,7 @@
-<html>
-	<h1>
-		{{.title}}
-	</h1>
-</html>
+{{ template "base" .}}
+
+{{define "title"}} Dashboard {{end}}
+
+{{define "main"}}
+	<h2> This is the dashboard </h2>
+{{end}}

@@ -4,6 +4,7 @@ go 1.15
 
 require (
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
+	github.com/gin-contrib/multitemplate v0.0.0-20210428235909-8a2f6dd269a0 // indirect
 	github.com/gin-gonic/gin v1.6.3
 	github.com/swaggo/files v0.0.0-20190704085106-630677cd5c14
 	github.com/swaggo/gin-swagger v1.3.0

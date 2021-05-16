@@ -6,42 +6,42 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// AddDataCsv godoc
+// AddData godoc
 // @Summary Upload csv data
 // @Tags data
 // @Accept  json
 // @Produce  json
-// @Router /data/csv [post]
-func (c *Controller) AddDataCsv(ctx *gin.Context) {
-	ctx.JSON(http.StatusNotImplemented, "AddDataCsv")
+// @Router /data [post]
+func (c *Controller) AddData(ctx *gin.Context) {
+	ctx.JSON(http.StatusNotImplemented, "AddData")
 }
 
-// ListDataCsv godoc
+// ListData godoc
 // @Summary List csv data
 // @Tags data
 // @Accept  json
 // @Produce  json
-// @Router /data/csv [get]
-func (c *Controller) ListDataCsv(ctx *gin.Context) {
-	ctx.JSON(http.StatusNotImplemented, "ListDataCsv")
+// @Router /data [get]
+func (c *Controller) ListData(ctx *gin.Context) {
+	ctx.HTML(http.StatusOK, "data", gin.H{})
 }
 
-// ShowDataCsv godoc
+// ShowData godoc
 // @Summary Show specific csv data
 // @Tags data
 // @Accept  json
 // @Produce  json
-// @Router /data/csv/{id} [get]
-func (c *Controller) ShowDataCsv(ctx *gin.Context) {
-	ctx.JSON(http.StatusNotImplemented, "ShowDataCsv")
+// @Router /data/{id} [get]
+func (c *Controller) ShowData(ctx *gin.Context) {
+	ctx.HTML(http.StatusOK, "data_details", gin.H{})
 }
 
-// DeleteDataCsv godoc
+// DeleteData godoc
 // @Summary Delete existing csv data
 // @Tags data
 // @Accept  json
 // @Produce  json
-// @Router /data/csv/{id} [delete]
-func (c *Controller) DeleteDataCsv(ctx *gin.Context) {
-	ctx.JSON(http.StatusNotImplemented, "DeleteDataCsv")
+// @Router /data/{id} [delete]
+func (c *Controller) DeleteData(ctx *gin.Context) {
+	ctx.JSON(http.StatusNotImplemented, "DeleteData")
 }

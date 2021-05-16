@@ -23,7 +23,7 @@ func (c *Controller) AddWorker(ctx *gin.Context) {
 // @Produce  json
 // @Router /workers [get]
 func (c *Controller) ListWorkers(ctx *gin.Context) {
-	ctx.JSON(http.StatusNotImplemented, "ListWorkers")
+	ctx.HTML(http.StatusOK, "workers", gin.H{})
 }
 
 // ShowWorker godoc
@@ -33,7 +33,7 @@ func (c *Controller) ListWorkers(ctx *gin.Context) {
 // @Produce  json
 // @Router /workers/{id} [get]
 func (c *Controller) ShowWorker(ctx *gin.Context) {
-	ctx.JSON(http.StatusNotImplemented, "ShowWorker")
+	ctx.HTML(http.StatusOK, "worker_details", gin.H{})
 }
 
 // DeleteWorker godoc

@@ -40,7 +40,7 @@ var doc = `{
                 "summary": "Show the dashboard"
             }
         },
-        "/data/csv": {
+        "/data": {
             "get": {
                 "consumes": [
                     "application/json"
@@ -66,7 +66,7 @@ var doc = `{
                 "summary": "Upload csv data"
             }
         },
-        "/data/csv/{id}": {
+        "/data/{id}": {
             "get": {
                 "consumes": [
                     "application/json"

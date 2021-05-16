@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/gin-contrib/multitemplate"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -15,21 +16,33 @@ import (
 // @contact.name Evgeniy Dzhurov
 // @contact.email edzhurov@uni-sofia.bg
 
+func createMyRenderer() multitemplate.Renderer {
+	r := multitemplate.NewRenderer()
+	r.AddFromFiles("dashboard", "templates/dashboard.html", "templates/base.html")
+	r.AddFromFiles("data", "templates/data.html", "templates/base.html")
+	r.AddFromFiles("data_details", "templates/data_details.html", "templates/base.html")
+	r.AddFromFiles("tasks", "templates/tasks.html", "templates/base.html")
+	r.AddFromFiles("task_details", "templates/task_details.html", "templates/base.html")
+	r.AddFromFiles("workers", "templates/workers.html", "templates/base.html")
+	r.AddFromFiles("worker_details", "templates/worker_details.html", "templates/base.html")
+	return r
+}
+
 func main() {
 	router := gin.Default()
 
 	c := controller.NewController()
 
-	router.LoadHtmlGlob("templates/*")
+	router.HTMLRender = createMyRenderer()
 
 	router.GET("", c.ShowDashboard)
 
-	data := router.Group("/data/csv")
+	data := router.Group("/data")
 	{
-		data.POST("", c.AddDataCsv)
-		data.GET("", c.ListDataCsv)
-		data.GET(":id", c.ShowDataCsv)
-		data.DELETE(":id", c.DeleteDataCsv)
+		data.POST("", c.AddData)
+		data.GET("", c.ListData)
+		data.GET(":id", c.ShowData)
+		data.DELETE(":id", c.DeleteData)
 	}
 
 	jobs := router.Group("/tasks")
