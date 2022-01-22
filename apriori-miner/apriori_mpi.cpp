@@ -16,6 +16,27 @@
 #include <mpi.h>
 
 ///////////////////////////////////////////////////////////////////////////////////////////
+// LOGGING
+///////////////////////////////////////////////////////////////////////////////////////////
+enum class LogLevel : uint8_t
+{
+    Debug = 0,
+    Info = 1,
+    Warn = 2,
+    Error = 3
+};
+const char* const s_logLevelStr[] = {
+    "DEBUG", "INFO", "WARN", "ERROR"
+};
+
+#define LOG_LEVEL LogLevel::Debug
+#define LOG_COMMON(level, x) if (level >= LOG_LEVEL) std::cout << "[" << s_logLevelStr[(std::uint8_t)level] << "] " << x << '\n'
+#define LOG_DEBUG(x) LOG_COMMON(LogLevel::Debug, x)
+#define LOG_INFO(x) LOG_COMMON(LogLevel::Info, x)
+#define LOG_WARN(x) LOG_COMMON(LogLevel::Warn, x)
+#define LOG_ERROR(x) LOG_COMMON(LogLevel::Error, x)
+
+///////////////////////////////////////////////////////////////////////////////////////////
 struct Params
 {
     Params(int argc, char** argv)
@@ -69,14 +90,6 @@ struct Params
         }
 
         return true;
-    }
-
-    void Print()
-    {
-        std::cout << "Params: (";
-        std::cout << "max_k = " << m_MaxK << ", ";
-        std::cout << "min_sup = " << m_MinSup << ", ";
-        std::cout << "min_conf = " << m_MinConf << ")\n";
     }
 
     int             m_MaxK = 2;
@@ -309,6 +322,8 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
         }
     }
 
+    LOG_INFO("Apriori number of transactions: " << transactions.size());
+
     ///////////////////////////////////////////////////////////////////////////////////////////
     auto count = [&](const Itemsets& itemsets, int k) 
     {
@@ -344,6 +359,8 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
     ///////////////////////////////////////////////////////////////////////////////////////////
     auto gather_1 = [&]()
     {
+        LOG_DEBUG("Gather K=1 ...");
+
         auto& counts = fsets.m_KthItemsetCounts[1];
 
         std::vector<int> globalCountSizes(ctx.m_Size);
@@ -404,6 +421,7 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
     ///////////////////////////////////////////////////////////////////////////////////////////
     auto gather_k = [&](int k)
     {
+        LOG_DEBUG("Gather k=" << k << " ...");
         auto& counts = fsets.m_KthItemsetCounts[k];
         
         // Reduce scatter
@@ -485,6 +503,7 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
     ///////////////////////////////////////////////////////////////////////////////////////////
     auto gen_L1 = [&]() -> Itemsets
     {
+        LOG_DEBUG("Generating L=1 ...");
         std::vector<Itemset> c1;
         c1.reserve(fsets.m_ItemMap.m_ItemToId.size());
         for (const auto& pair: fsets.m_ItemMap.m_IdToItem)
@@ -499,6 +518,7 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
     ///////////////////////////////////////////////////////////////////////////////////////////
     auto gen_Lk = [&](const Itemsets& itemsets, int k) -> Itemsets
     {
+        LOG_DEBUG("Generating L=" << k << "...");
         Itemsets result;
 
         const auto& counts = fsets.m_KthItemsetCounts[k-1]; // Counts for k-1 subsets
@@ -560,12 +580,16 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
         ++k;
     }
 
+    LOG_DEBUG("Done building frequent itemsets.");
+
     return fsets;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float support, const FrequentItemsets& fsets, const Params& params)
 {
+    LOG_DEBUG("Generate rules recursively...");
+
     auto subtract = [](const Itemset& lhs, const Itemset& rhs) -> Itemset
     {
         Itemset result;
@@ -657,6 +681,8 @@ bool RulesToCsv(const FrequentItemsets& fsets, const std::vector<Rule> rules, co
 ///////////////////////////////////////////////////////////////////////////////////////////
 void DebugAttachWait()
 {
+    LOG_DEBUG("Wating to attach debugger...");
+
     volatile int i = 0;
     char hostname[256];
     gethostname(hostname, sizeof(hostname));
@@ -708,48 +734,51 @@ int main(int argc, char* argv[])
 
     if (!params.Parse())
     {
-        std::cout << "Error parsing arguments!\n";
+        LOG_ERROR("Failed to parse arguments!");
         return 1;
     }
     else
     {
-        params.Print();
+        LOG_INFO("Params (input=" << params.m_InputFile
+                    << " max_k= " << params.m_MaxK 
+                    << " min_sup=" << params.m_MinSup
+                    << " min_conf=" << params.m_MinConf);
     }
 
     InputData samples;
     if (!ReadInputData(params.m_InputFile, samples))
     {
-        std::cout << "Error reading input data from file!\n";
+        LOG_ERROR("Failed to read input data from file! fileName=" << params.m_InputFile);
         return 1;
     }
 
+    LOG_DEBUG("Initializing MPI...");
     MPI_Init(&argc, &argv);
 
     MPIContext ctx;
     MPI_Comm_size(MPI_COMM_WORLD, &ctx.m_Size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &ctx.m_Rank);
 
-    std::cout << "\n======================= MPI INITIALIZED =======================\n";
-    std::cout << "MPI rank " << ctx.m_Rank << '/' << ctx.m_Size << '\n';
+    LOG_INFO("MPI Initialized" << " rank=" << ctx.m_Rank << "/" << ctx.m_Size);
 
     auto fsets = Apriori(samples, params, ctx);
 
-    std::cout << "Frequent Itemsets:\n";
-    fsets.Print();
-    fsets.ToCsv("frequent_itemsets.csv");
+    //std::cout << "Frequent Itemsets:\n";
+    //fsets.Print();
+    //fsets.ToCsv("frequent_itemsets.csv");
 
     auto rules = GenerateRules(fsets, params, ctx);
 
-    std::cout << "\nRule | Confidence | Lift\n";
-    for (const auto& rule : rules)
-    {
-        std::cout << rule.ToString(fsets) << '\n';
-    }
+    //std::cout << "\nRule | Confidence | Lift\n";
+    //for (const auto& rule : rules)
+    //{
+    //   std::cout << rule.ToString(fsets) << '\n';
+    //}
 
-    RulesToCsv(fsets, rules, "rules.csv");
+    //RulesToCsv(fsets, rules, "rules.csv");
 
     MPI_Finalize();
-    std::cout << "\n======================= MPI FINALIZED =======================\n\n";
+    LOG_INFO("MPI finalized");
 
     return 0;
 }
