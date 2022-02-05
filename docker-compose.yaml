@@ -6,10 +6,17 @@ services:
             - "8080:80"
         networks:
             - dist-apriori-net
+        volumes:
+            - dist-apriori-data:/var/dist-apriori-data
     dist-apriori-miner:
         image: dist-apriori-miner
         entrypoint: ["/usr/sbin/sshd", "-D"]
         networks:
             - dist-apriori-net
+        volumes:
+            - dist-apriori-data:/var/dist-apriori-data
 networks:
     dist-apriori-net:
+
+volumes:
+    dist-apriori-data:

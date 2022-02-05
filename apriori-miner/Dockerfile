@@ -48,4 +48,5 @@ WORKDIR /usr/src/app
 
 # Build app
 COPY apriori_mpi.cpp .
+COPY sample_tiny.csv .
 RUN mpicxx apriori_mpi.cpp -o apriori_mpi

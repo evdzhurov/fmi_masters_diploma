@@ -30,6 +30,7 @@ const char* const s_logLevelStr[] = {
 };
 
 #define LOG_LEVEL LogLevel::Debug
+
 #define LOG_COMMON(level, x) if (level >= LOG_LEVEL) std::cout << "[" << s_logLevelStr[(std::uint8_t)level] << "] " << x << '\n'
 #define LOG_DEBUG(x) LOG_COMMON(LogLevel::Debug, x)
 #define LOG_INFO(x) LOG_COMMON(LogLevel::Info, x)
