@@ -130,6 +130,8 @@ struct ItemMap
         return it != m_IdToItem.end() ? &(it->second) : nullptr;
     }
 
+    bool Empty() const { return m_NextId == 0; }
+
     void Print() const
     {
         std::cout << "ItemMap:\n";
@@ -198,24 +200,34 @@ struct Itemset
         }
     }
 
-    std::string ToString(const ItemMap& imap, char delim = ',') const
+    std::string ToString(const ItemMap& imap = ItemMap{}, char delim = ',') const
     {
         if (m_Items.empty()) return "";
         std::stringstream ss;
         ss << '<';
 
-        auto getItemName = [&](int itemId) -> const char*
+        if (imap.Empty())
         {
-            auto str = imap.GetItem(itemId);
-            return str ? str->c_str() : "MISSING";
-        };
-
-        for (int i = 0; i < m_Items.size() - 1; ++i)
-        {
-            auto str = imap.GetItem(m_Items[i]);
-            ss << getItemName(m_Items[i]) << delim;
+            for (int i = 0; i < m_Items.size() - 1; ++i)
+            {
+                ss << m_Items[i] << delim;
+            }
+            ss << m_Items.back() << '>';
         }
-        ss << getItemName(m_Items.back()) << '>';
+        else
+        {
+            auto getItemName = [&](int itemId) -> const char*
+            {
+                auto str = imap.GetItem(itemId);
+                return str ? str->c_str() : "MISSING";
+            };
+
+            for (int i = 0; i < m_Items.size() - 1; ++i)
+            {
+                ss << getItemName(m_Items[i]) << delim;
+            }
+            ss << getItemName(m_Items.back()) << '>';
+        }
         
         return ss.str();
     }
@@ -323,7 +335,7 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
         }
     }
 
-    LOG_INFO("Apriori number of transactions: " << transactions.size());
+    LOG_INFO("Transactions: " << transactions.size());
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     auto count = [&](const Itemsets& itemsets, int k) 
@@ -339,6 +351,8 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
             if (t.size() < k) continue; // Transaction cannot contain itemset
             for (const auto& itemset : itemsets)
             {
+                auto& count = counts[itemset]; // Creates the itemset with count 0
+                
                 bool found = true;
                 for (const auto& item : itemset.m_Items)
                 {
@@ -349,10 +363,7 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
                     }
                 }
 
-                if (found)
-                {
-                    counts[itemset] += 1;
-                }
+                if (found) ++count;
             }
         }
     };
@@ -424,7 +435,7 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
     {
         LOG_DEBUG("Gather k=" << k << " ...");
         auto& counts = fsets.m_KthItemsetCounts[k];
-        
+
         // Reduce scatter
         const int size = counts.size();
         const int size_part = size / ctx.m_Size;
@@ -565,17 +576,31 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
             }
         }
 
+        LOG_DEBUG("L" << k << " Candidates:");
+        for (const auto& itemset : result)
+            LOG_DEBUG(itemset.ToString());
+
         return result;
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////
     int k = 2;
     Itemsets L = gen_L1();
+
+    LOG_DEBUG("L1 itemsets:");
+    for (const auto& kvp : fsets.m_KthItemsetCounts[1])
+        LOG_DEBUG(kvp.first.ToString() << " : " << kvp.second);
+
     while (L.size() > 0)
     {
-        if (params.m_MaxK > 0 and k > params.m_MaxK) break;
+        if (params.m_MaxK > 0 && k > params.m_MaxK) break;
         Itemsets C = gen_Lk(L, k);
         count(C, k);
+
+        LOG_DEBUG("L" << k << "counted itemsets:");
+        for (const auto& kvp : fsets.m_KthItemsetCounts[k])
+            LOG_DEBUG(kvp.first.ToString() << " : " << kvp.second);
+
         gather_k(k);
         L = prune(C, k);
         ++k;
