@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+
 	"github.com/gin-contrib/multitemplate"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -30,6 +32,8 @@ func createMyRenderer() multitemplate.Renderer {
 
 func main() {
 	router := gin.Default()
+
+	router.StaticFS("/volume", http.Dir("../volume"))
 
 	c := controller.NewController()
 
