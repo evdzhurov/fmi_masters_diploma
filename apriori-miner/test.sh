@@ -1,7 +1,7 @@
 #!/bin/bash
 
 JOB_ID="test-job"
-N_PROC=1
+N_PROC=3
 
 DATA_PATH="/var/dist-apriori-data"
 if [ ! -d ${DATA_PATH} ]; then

@@ -374,59 +374,92 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
         LOG_DEBUG("Gather K=1 ...");
 
         auto& counts = fsets.m_KthItemsetCounts[1];
-
-        std::vector<int> globalCountSizes(ctx.m_Size);
+        std::vector<int> localCountsDataSizeForRank(ctx.m_Size);
         std::vector<int> countOffsets;
         countOffsets.reserve(ctx.m_Size);
         
-        // Calculate total size of counts across processes
-        const int localCountSize = counts.size() * 2;
+        // Sum the number of non-zero counts we will be sending
+        int localCountsDataSize = 0;
+        for (const auto& kvp : counts)
+        {
+            if (kvp.second > 0) ++localCountsDataSize;
+        }
 
-        MPI_Allgather(
-            &localCountSize,
+        // Each count is a pair of an item id and count
+        localCountsDataSize = localCountsDataSize * 2;
+
+        int err = MPI_SUCCESS;
+
+        // Exchange local counts data sizes 
+        // to calculate the global counts data size
+        err = MPI_Allgather(
+            &localCountsDataSize,
             1,
             MPI_INT,
-            globalCountSizes.data(),
-            globalCountSizes.size(),
+            localCountsDataSizeForRank.data(),
+            1,
             MPI_INT,
             MPI_COMM_WORLD);
 
-        // Create offsets from running sum of global counts size
-        int globalCountsSize = 0;
-        for (int size : globalCountSizes)
+        if (err != MPI_SUCCESS)
         {
-            countOffsets.push_back(globalCountsSize);
-            globalCountsSize += size;
+            LOG_ERROR("MPI_Allgather failed with err: " << err);
+            exit(1);
         }
 
-        // Gather all counts
-        std::vector<int> localCounts;
-        localCounts.reserve(localCountSize);
+        // Create offsets from running sum of global counts size
+        int globalCountsDataSize = 0;
+        for (int size : localCountsDataSizeForRank)
+        {
+            countOffsets.push_back(globalCountsDataSize);
+            globalCountsDataSize += size;
+        }
 
+        // Gather counts data
+        std::vector<int> localCountsData;
+        localCountsData.reserve(localCountsDataSize);
+
+        LOG_DEBUG("Local counts data:");
         for (const auto& kvp : counts)
         {
-            localCounts.push_back(kvp.first.m_Items.front());
-            localCounts.push_back(kvp.second);
+            if (kvp.second > 0)
+            {
+                localCountsData.push_back(kvp.first.m_Items.front());
+                localCountsData.push_back(kvp.second);
+
+                LOG_DEBUG(kvp.first.ToString() << ": " << kvp.second);
+            }
         }
 
-        std::vector<int> globalCounts(globalCountsSize);
+        std::vector<int> globalCountsData(globalCountsDataSize);
 
-        MPI_Allgatherv(
-            localCounts.data(),
-            localCounts.size(),
+        err = MPI_Allgatherv(
+            localCountsData.data(),
+            localCountsData.size(),
             MPI_INT,
-            globalCounts.data(),
-            globalCountSizes.data(),
+            globalCountsData.data(),
+            localCountsDataSizeForRank.data(),
             countOffsets.data(),
             MPI_INT,
             MPI_COMM_WORLD);
-        
+
+        if (err != MPI_SUCCESS)
+        {
+            LOG_ERROR("MPI_Allgatherv failed with err: " << err);
+            exit(1);
+        }
 
         // Merge counts from all processes into local data
         counts.clear();
-        for (int i = 1; i < globalCountsSize; i+=2)
+        for (int i = 1; i < globalCountsDataSize; i+=2)
         {
-            counts[Itemset(globalCounts[i-1])] += globalCounts[i];
+            counts[Itemset(globalCountsData[i-1])] += globalCountsData[i];
+        }
+
+        LOG_DEBUG("Global counts data for k=1:");
+        for (const auto& kvp : counts)
+        {
+            LOG_DEBUG(kvp.first.ToString() << ": " << kvp.second);
         }
     };
 
@@ -508,7 +541,7 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
                 result.push_back(itemset);
             }
         }
-        
+
         return result;
     };
 
@@ -516,12 +549,12 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
     auto gen_L1 = [&]() -> Itemsets
     {
         LOG_DEBUG("Generating L=1 ...");
+        
         std::vector<Itemset> c1;
         c1.reserve(fsets.m_ItemMap.m_ItemToId.size());
-        for (const auto& pair: fsets.m_ItemMap.m_IdToItem)
-        {
+        for (const auto& pair: fsets.m_ItemMap.m_IdToItem) 
             c1.emplace_back(pair.first);
-        }
+
         count(c1, 1);
         gather_1();
         return prune(c1, 1);
