@@ -344,6 +344,12 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
         int last = (ctx.m_Rank + 1) * fsets.m_NumTrans / ctx.m_Size;
         auto& counts = fsets.m_KthItemsetCounts[k];
 
+        // Init all itemsets with count 0
+        // Note that counts will be later gathered across all processes 
+        // and all itemsets should exist in m_KthItemsetCounts
+        for (const auto& itemset : itemsets)
+            counts[itemset] = 0;
+
         for (int i = first; i < last; ++i)
         {
             const auto& t = transactions[i];
@@ -351,8 +357,6 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
             if (t.size() < k) continue; // Transaction cannot contain itemset
             for (const auto& itemset : itemsets)
             {
-                auto& count = counts[itemset]; // Creates the itemset with count 0
-                
                 bool found = true;
                 for (const auto& item : itemset.m_Items)
                 {
@@ -363,7 +367,8 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
                     }
                 }
 
-                if (found) ++count;
+                if (found) 
+                    counts[itemset] += 1;
             }
         }
     };
@@ -486,6 +491,9 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
 
         std::vector<int> globalCountsForRank(sizes[ctx.m_Rank]);
 
+        LOG_DEBUG("MPI_Reduce_scatter start");
+        LOG_DEBUG("counts size =" << size);
+        LOG_DEBUG("size part = " << size_part);
         MPI_Reduce_scatter(
             localCounts.data(), /*sendbuf*/
             globalCountsForRank.data(), /*recvbuf*/
@@ -494,6 +502,7 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
             MPI_SUM,
             MPI_COMM_WORLD
         );
+        LOG_DEBUG("MPI_Reduce_scatter end");
 
         // All gather
         std::vector<int> globalCounts(size);
@@ -506,6 +515,7 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
             offsetSum += size;
         }
 
+        LOG_DEBUG("MPI_Allgatherv start");
         MPI_Allgatherv(
             globalCountsForRank.data(), /*sendbuf*/
             globalCountsForRank.size(), /*sendcount*/
@@ -516,6 +526,7 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
             MPI_INT,
             MPI_COMM_WORLD
         );
+        LOG_DEBUG("MPI_Allgatherv end");
 
         // Update final counts assuming dict is ordered
         int i = 0;
@@ -609,10 +620,6 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
             }
         }
 
-        LOG_DEBUG("L" << k << " Candidates:");
-        for (const auto& itemset : result)
-            LOG_DEBUG(itemset.ToString());
-
         return result;
     };
 
@@ -620,26 +627,26 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
     int k = 2;
     Itemsets L = gen_L1();
 
-    LOG_DEBUG("L1 itemsets:");
-    for (const auto& kvp : fsets.m_KthItemsetCounts[1])
-        LOG_DEBUG(kvp.first.ToString() << " : " << kvp.second);
-
     while (L.size() > 0)
     {
         if (params.m_MaxK > 0 && k > params.m_MaxK) break;
         Itemsets C = gen_Lk(L, k);
         count(C, k);
-
-        LOG_DEBUG("L" << k << "counted itemsets:");
-        for (const auto& kvp : fsets.m_KthItemsetCounts[k])
-            LOG_DEBUG(kvp.first.ToString() << " : " << kvp.second);
+        LOG_DEBUG("k=" << k << " candidate itemsets:");
+        for (const auto& itemset : C)
+            LOG_DEBUG(itemset.ToString());
 
         gather_k(k);
         L = prune(C, k);
+
+        LOG_DEBUG("k=" << k << " pruned itemsets:");
+        for (const auto& itemset : L)
+            LOG_DEBUG(itemset.ToString());
+        
         ++k;
     }
 
-    LOG_DEBUG("Done building frequent itemsets.");
+    LOG_DEBUG("Done building frequent itemsets. k=" << k << " max_k=" << params.m_MaxK);
 
     return fsets;
 }
@@ -647,8 +654,6 @@ FrequentItemsets Apriori(const InputData& data, const Params& params, const MPIC
 ///////////////////////////////////////////////////////////////////////////////////////////
 void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float support, const FrequentItemsets& fsets, const Params& params)
 {
-    LOG_DEBUG("Generate rules recursively...");
-
     auto subtract = [](const Itemset& lhs, const Itemset& rhs) -> Itemset
     {
         Itemset result;
@@ -682,16 +687,27 @@ void GenerateRulesR(const Itemset& lhs, const Itemset& rhs, Rules& rules, float 
 ///////////////////////////////////////////////////////////////////////////////////////////
 std::vector<Rule> GenerateRules(const FrequentItemsets& fsets, const Params& params, const MPIContext& ctx)
 {
+    LOG_INFO("GenerateRules ...");
     std::vector<Rule> rules;
 
-    for (int i = 2; i <= params.m_MaxK; ++i)
+     // Use the actual computed k rounds (could be less than max_k param)
+    int k = fsets.m_KthItemsetCounts.size();
+
+    // Rules are meaningles for k=1 (single item itemsets)
+    if (k == 1)
     {
-        // Partition itemsets equally
+        LOG_WARN("Rules can't be generated from single item itemsets(k=1)!");
+        return rules;
+    }
+
+    for (int i = 2; i <= k; ++i)
+    {
+        // Partition itemsets equally among processes
         auto it = fsets.m_KthItemsetCounts.find(i);
         if (it == fsets.m_KthItemsetCounts.end())
         {
-            assert(!"k-th itemsets not found!");
-            return rules;
+            LOG_ERROR("k=" << i << " itemsets not found!");
+            exit(1);
         }
 
         const auto& itemsets = it->second;
@@ -713,6 +729,8 @@ std::vector<Rule> GenerateRules(const FrequentItemsets& fsets, const Params& par
             GenerateRulesR(itemset, itemset, rules, support, fsets, params);
         }
     }
+
+    LOG_INFO("GenerateRules done.");
 
     return rules;
 }
@@ -799,7 +817,7 @@ int main(int argc, char* argv[])
     else
     {
         LOG_INFO("Params (input=" << params.m_InputFile
-                    << " max_k= " << params.m_MaxK 
+                    << " max_k=" << params.m_MaxK 
                     << " min_sup=" << params.m_MinSup
                     << " min_conf=" << params.m_MinConf);
     }
@@ -822,18 +840,14 @@ int main(int argc, char* argv[])
 
     auto fsets = Apriori(samples, params, ctx);
 
-    //std::cout << "Frequent Itemsets:\n";
-    //fsets.Print();
+    std::cout << "Frequent Itemsets:\n";
+    fsets.Print();
     //fsets.ToCsv("frequent_itemsets.csv");
 
     auto rules = GenerateRules(fsets, params, ctx);
-
-    //std::cout << "\nRule | Confidence | Lift\n";
-    //for (const auto& rule : rules)
-    //{
-    //   std::cout << rule.ToString(fsets) << '\n';
-    //}
-
+    std::cout << "\nRule | Confidence | Lift\n";
+    for (const auto& rule : rules)
+       std::cout << rule.ToString(fsets) << '\n';
     //RulesToCsv(fsets, rules, "rules.csv");
 
     MPI_Finalize();
