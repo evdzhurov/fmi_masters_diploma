@@ -1,4 +1,4 @@
-FROM golang:1.15 AS websrv_node
+FROM golang:1.18 AS websrv_node
 
 LABEL maintainer="edzhurov@uni-sofia.bg"
 

@@ -53,3 +53,7 @@ dkms.conf
 # Python
 venv
 __pycache__
+
+# Directories
+apriori-miner/test/dist-apriori-data
+apriori-miner/test/bin

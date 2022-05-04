@@ -9,7 +9,7 @@ MIN_CONFIDENCE=1.0
 
 DATA_PATH="/var/dist-apriori-data"
 if [ ! -d ${DATA_PATH} ]; then
-    DATA_PATH="../volume"
+    DATA_PATH="dist-apriori-data"
 fi
 
 JOB_PATH="${DATA_PATH}/${JOB_ID}"
