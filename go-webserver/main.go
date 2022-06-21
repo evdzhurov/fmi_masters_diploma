@@ -27,7 +27,6 @@ func main() {
 	{
 		jobs.POST("", c.AddJob)
 		jobs.GET("", c.ListJobs)
-		jobs.GET(":id", c.ShowJob)
 		jobs.DELETE(":id", c.DeleteJob)
 	}
 
@@ -35,7 +34,6 @@ func main() {
 	{
 		workers.POST("", c.AddWorker)
 		workers.GET("", c.ListWorkers)
-		workers.GET(":id", c.ShowWorker)
 		workers.DELETE(":id", c.DeleteWorker)
 	}
 
