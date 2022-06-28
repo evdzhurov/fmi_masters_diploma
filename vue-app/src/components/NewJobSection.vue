@@ -17,28 +17,38 @@ export default {
     <div class="NewJob">
         <h1>New Job</h1>
         <form id="new-job-form">
-            <label for="input-filename">Input file:</label>
-            <input type="file" id="input-filename"/>
-            <button>Preview</button>
+            <div class="form-field">
+                <label for="input-filename">Input file:</label>
+                <input type="file" id="input-filename" />
+                <button>Preview</button>
+            </div>
 
-            <label for="max-k">Iterations:</label>
-            <input type="number" id="max-k" v-model="numIterations"/>
+            <div class="form-field">
+                <label for="max-k">Iterations:</label>
+                <input type="number" id="max-k" v-model="numIterations" />
+            </div>
 
-            <label for="min-sup">Min. Support:</label>
-            <input type="number" id="min-sup" v-model="minSupport"/>
+            <div class="form-field">
+                <label for="min-sup">Min. Support:</label>
+                <input type="number" id="min-sup" v-model="minSupport" />
+            </div>
 
-            <label for="min-conf">Min. Confidence:</label>
-            <input type="number" id="min-conf" v-model="minConfidence"/>
+            <div class="form-field">
+                <label for="min-conf">Min. Confidence:</label>
+                <input type="number" id="min-conf" v-model="minConfidence" />
+            </div>
 
-            <label for="worker-size">Number of workers:</label>
-            <select v-model="numWorkers" id="worker-size">
-                <option value="2">2</option>
-                <option value="4">4</option>
-                <option value="8">8</option>
-                <option value="16">16</option>
-            </select>
+            <div class="form-field">
+                <label for="worker-size">Number of workers:</label>
+                <select v-model="numWorkers" id="worker-size">
+                    <option value="2">2</option>
+                    <option value="4">4</option>
+                    <option value="8">8</option>
+                    <option value="16">16</option>
+                </select>
+            </div>
 
-            <input type="submit" value="Submit" id="submit-btn"/>
+            <input type="submit" value="Submit" id="submit-btn" />
         </form>
     </div>
 </template>
@@ -47,6 +57,10 @@ export default {
 #new-job-form {
     padding: 1rem;
     margin: 1rem;
+}
+
+.form-field {
+    margin: 0.5em 0;
 }
 
 #submit-btn {
